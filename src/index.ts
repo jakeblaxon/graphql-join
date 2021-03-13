@@ -1,24 +1,121 @@
-console.log('Try npm run lint/fix!');
+import {GraphQLSchema, isListType, Kind} from 'graphql';
+import {
+  BatchDelegateOptions,
+  batchDelegateToSchema,
+} from '@graphql-tools/batch-delegate';
+import {AddSelectionSets, Transform} from '@graphql-tools/delegate';
+import {stitchSchemas} from '@graphql-tools/stitch';
+import {IResolvers} from '@graphql-tools/utils';
+import * as _ from 'lodash';
 
-const longString =
-  'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer ut aliquet diam.';
+type PossibleArray<T> = T | T[];
 
-const trailing = 'Semicolon';
+type JoinMapping = PossibleArray<{
+  parent: string;
+  child: string;
+}>;
 
-const why = 'am I tabbed?';
-
-export function doSomeStuff(
-  withThis: string,
-  andThat: string,
-  andThose: string[]
-) {
-  //function on one line
-  if (!andThose.length) {
-    return false;
-  }
-  console.log(withThis);
-  console.log(andThat);
-  console.dir(andThose);
-  return;
+interface GraphQLJoinConfig {
+  typedefs: string;
+  resolvers: {
+    [type: string]: {
+      [field: string]: {
+        selectionSet: string;
+        queryName: string;
+        args: BatchDelegateOptions['argsFromKeys'];
+        joinOn: JoinMapping;
+      };
+    };
+  };
 }
-// TODO: more examples
+
+export default class GraphQLJoin implements Transform {
+  constructor(private config: GraphQLJoinConfig) {}
+
+  public transformSchema(originalWrappingSchema: GraphQLSchema) {
+    return stitchSchemas({
+      subschemas: [originalWrappingSchema],
+      typeDefs: this.config.typedefs,
+      resolvers: createResolvers(this.config.resolvers),
+    });
+  }
+}
+
+const createResolvers = (resolversConfig: GraphQLJoinConfig['resolvers']) =>
+  _.mapValues(resolversConfig, (typeConfig, type) =>
+    _.mapValues(typeConfig, (fieldConfig, field) => {
+      const selectChildKeys = addChildKeyFieldsToSelectionSetTransform(
+        type,
+        field,
+        _.isArray(fieldConfig.joinOn)
+          ? fieldConfig.joinOn.map(mapping => mapping.child)
+          : [fieldConfig.joinOn.child]
+      );
+      return {
+        selectionSet: fieldConfig.selectionSet,
+        resolve: (parent, args, context, info) =>
+          batchDelegateToSchema({
+            schema: info.schema,
+            operation: 'query',
+            fieldName: fieldConfig.queryName,
+            key: parent,
+            argsFromKeys: fieldConfig.args,
+            valuesFromResults: (results, keys) =>
+              mapChildrenToParents(
+                results,
+                keys,
+                fieldConfig.joinOn,
+                isListType(info.returnType)
+              ),
+            context,
+            info,
+            transforms: [selectChildKeys],
+          }),
+      } as IResolvers;
+    })
+  );
+
+const addChildKeyFieldsToSelectionSetTransform = (
+  type: string,
+  field: string,
+  childKeys: string[]
+) =>
+  new AddSelectionSets(
+    {},
+    {
+      [type]: {
+        [field]: {
+          kind: Kind.SELECTION_SET,
+          selections: childKeys.map(key => ({
+            kind: Kind.FIELD,
+            name: {
+              kind: Kind.NAME,
+              value: key,
+            },
+          })),
+        },
+      },
+    },
+    {}
+  );
+
+const mapChildrenToParents = (
+  children: any[],
+  parents: readonly any[],
+  joinMapping: JoinMapping,
+  listType: boolean
+) => {
+  if (!_.isArray(joinMapping)) {
+    const keyToChildren = _.groupBy(
+      children,
+      child => child[joinMapping.child]
+    );
+    return parents.map(
+      listType
+        ? keyToChildren[joinMapping.parent]
+        : keyToChildren[joinMapping.parent][0]
+    );
+  } else {
+    return children;
+  }
+};

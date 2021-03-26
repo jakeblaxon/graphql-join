@@ -2,6 +2,7 @@ import {
   FieldNode,
   GraphQLSchema,
   isListType,
+  isNonNullType,
   Kind,
   parse,
   SelectionNode,
@@ -15,7 +16,7 @@ import {WrapQuery} from '@graphql-tools/wrap';
 import _ from 'lodash';
 
 export interface GraphQLJoinConfig {
-  typedefs: string;
+  typeDefs: string;
   resolvers: {
     [type: string]: {
       [field: string]: string;
@@ -30,7 +31,7 @@ export default class GraphQLJoin implements Transform {
   public transformSchema(originalWrappingSchema: GraphQLSchema) {
     return (this.transformedSchema = stitchSchemas({
       subschemas: [originalWrappingSchema],
-      typeDefs: this.config.typedefs,
+      typeDefs: this.config.typeDefs,
       resolvers: this.createResolvers(this.config.resolvers),
     }));
   }
@@ -73,7 +74,9 @@ export default class GraphQLJoin implements Transform {
               results,
               keys,
               keyMapping,
-              isListType(info.returnType)
+              isListType(info.returnType) ||
+                (isNonNullType(info.returnType) &&
+                  isListType(info.returnType.ofType))
             ),
           context,
           info,
@@ -129,7 +132,7 @@ export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
           .value()
       )
     );
-    return visit(queryFieldNode, {
+    const args = visit(queryFieldNode, {
       leave: {
         Argument: node => ({[node.name.value]: node.value}),
         ObjectValue: node =>
@@ -141,6 +144,7 @@ export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
         Variable: node => variableValues.get(node.name.value),
       },
     }).arguments;
+    return _.merge({}, ...args);
   };
 }
 

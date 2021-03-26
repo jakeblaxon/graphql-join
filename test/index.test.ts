@@ -59,24 +59,22 @@ describe('createArgsFromKeysFunction', () => {
       {bookTitle: 'bookTitle 2', bookAuthor: 'bookAuthor 2'},
       {bookTitle: 'bookTitle 3', bookAuthor: 'bookAuthor 3'},
     ];
-    expect(result(args)).toEqual([
-      {
-        filter: {
-          and: [
-            {
-              title: {
-                in: ['bookTitle 1', 'bookTitle 2', 'bookTitle 3'],
-              },
+    expect(result(args)).toEqual({
+      filter: {
+        and: [
+          {
+            title: {
+              in: ['bookTitle 1', 'bookTitle 2', 'bookTitle 3'],
             },
-            {
-              author: {
-                in: ['bookAuthor 1', 'bookAuthor 2', 'bookAuthor 3'],
-              },
+          },
+          {
+            author: {
+              in: ['bookAuthor 1', 'bookAuthor 2', 'bookAuthor 3'],
             },
-          ],
-        },
+          },
+        ],
       },
-    ]);
+    });
   });
 });
 

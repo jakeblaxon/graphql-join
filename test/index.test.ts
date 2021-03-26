@@ -1,9 +1,9 @@
 import {mergeSchemas} from '@graphql-tools/merge';
 import {wrapSchema} from '@graphql-tools/wrap';
 import {execute, parse} from 'graphql';
-import GraphQLJoin from '../src';
 import {productSchema} from './fixtures/products';
 import {reviewSchema} from './fixtures/reviews';
+import GraphQLJoin from '../src';
 
 const mergedSchema = mergeSchemas({
   schemas: [productSchema, reviewSchema],
@@ -19,9 +19,7 @@ describe('GraphQLJoin', () => {
       `,
       resolvers: {
         Review: {
-          product: `#graphql
-            getProductsById(ids: $productId) { productId: upc }
-          `,
+          product: 'getProductsById(ids: $productId) { productId: upc }',
         },
       },
     });
@@ -36,9 +34,9 @@ describe('GraphQLJoin', () => {
           getReviewsById(ids: ["1", "2", "3", "4"]) {
             id
             body
-            productId
+            
             product {
-              upc
+              
               name
               price
               weight

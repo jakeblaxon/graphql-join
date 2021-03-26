@@ -7,6 +7,7 @@ import {AddSelectionSets, Transform} from '@graphql-tools/delegate';
 import {stitchSchemas} from '@graphql-tools/stitch';
 import {IResolvers} from '@graphql-tools/utils';
 import * as _ from 'lodash';
+import {WrapQuery} from '@graphql-tools/wrap';
 
 type PossibleArray<T> = T | T[];
 
@@ -45,7 +46,6 @@ const createResolvers = (resolversConfig: GraphQLJoinConfig['resolvers']) =>
   _.mapValues(resolversConfig, (typeConfig, type) =>
     _.mapValues(typeConfig, (fieldConfig, field) => {
       const selectChildKeys = addChildKeyFieldsToSelectionSetTransform(
-        type,
         field,
         _.isArray(fieldConfig.joinOn)
           ? fieldConfig.joinOn.map(mapping => mapping.child)
@@ -75,31 +75,35 @@ const createResolvers = (resolversConfig: GraphQLJoinConfig['resolvers']) =>
     })
   );
 
-const addChildKeyFieldsToSelectionSetTransform = (
-  type: string,
-  field: string,
+export const addChildKeyFieldsToSelectionSetTransform = (
+  queryName: string,
   childKeys: string[]
 ) =>
-  new AddSelectionSets(
-    {},
-    {
-      [type]: {
-        [field]: {
-          kind: Kind.SELECTION_SET,
-          selections: childKeys.map(key => ({
+  new WrapQuery(
+    [queryName],
+    selectionSet => {
+      const a = {
+        ...selectionSet,
+        selections: selectionSet.selections.concat(
+          childKeys.map(key => ({
             kind: Kind.FIELD,
             name: {
               kind: Kind.NAME,
               value: key,
             },
-          })),
-        },
-      },
+          }))
+        ),
+      };
+      console.log(JSON.stringify(a, null, 2));
+      return a;
     },
-    {}
+    result => {
+      console.log(result);
+      return result;
+    }
   );
 
-const mapChildrenToParents = (
+export const mapChildrenToParents = (
   children: any[],
   parents: readonly any[],
   joinMapping: JoinMapping,

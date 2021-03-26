@@ -1,125 +1,123 @@
-import {GraphQLSchema, isListType, Kind} from 'graphql';
 import {
-  BatchDelegateOptions,
-  batchDelegateToSchema,
-} from '@graphql-tools/batch-delegate';
-import {AddSelectionSets, Transform} from '@graphql-tools/delegate';
+  FieldNode,
+  GraphQLSchema,
+  isListType,
+  Kind,
+  parse,
+  visit,
+} from 'graphql';
+import {batchDelegateToSchema} from '@graphql-tools/batch-delegate';
+import {Transform} from '@graphql-tools/delegate';
 import {stitchSchemas} from '@graphql-tools/stitch';
 import {IResolvers} from '@graphql-tools/utils';
-import * as _ from 'lodash';
+import _ from 'lodash';
 import {WrapQuery} from '@graphql-tools/wrap';
-
-type PossibleArray<T> = T | T[];
-
-type JoinMapping = PossibleArray<{
-  parent: string;
-  child: string;
-}>;
-
 interface GraphQLJoinConfig {
   typedefs: string;
   resolvers: {
     [type: string]: {
       [field: string]: {
-        selectionSet: string;
-        queryName: string;
-        args: BatchDelegateOptions['argsFromKeys'];
-        joinOn: JoinMapping;
+        joinQuery: string;
       };
     };
   };
 }
 
-export default class GraphQLJoin implements Transform {
-  constructor(private config: GraphQLJoinConfig) {}
+// export default class GraphQLJoin implements Transform {
+//   private transformedSchema: GraphQLSchema | null = null;
+//   constructor(private config: GraphQLJoinConfig) {}
 
-  public transformSchema(originalWrappingSchema: GraphQLSchema) {
-    return stitchSchemas({
-      subschemas: [originalWrappingSchema],
-      typeDefs: this.config.typedefs,
-      resolvers: createResolvers(this.config.resolvers),
-    });
-  }
+//   public transformSchema(originalWrappingSchema: GraphQLSchema) {
+//     this.transformedSchema = stitchSchemas({
+//       subschemas: [originalWrappingSchema],
+//       typeDefs: this.config.typedefs,
+//       resolvers: this.createResolvers(this.config.resolvers),
+//     });
+//     return this.transformedSchema;
+//   }
+
+//   private createResolvers(resolversConfig: GraphQLJoinConfig['resolvers']) {
+//     return _.mapValues(resolversConfig, (typeConfig, type) =>
+//       _.mapValues(typeConfig, (fieldConfig, field) => {
+//         const def = parse(`{${fieldConfig.joinQuery}}`).definitions[0];
+//         const queryFieldNode =
+//           def.kind === Kind.OPERATION_DEFINITION &&
+//           def.selectionSet.selections[0].kind === Kind.FIELD &&
+//           def.selectionSet.selections[0];
+//         if (!queryFieldNode) throw Error('invalid joinQuery config');
+//         return {
+//           selectionSet: createSelectionSet(queryFieldNode),
+//           resolve: (parent, args, context, info) =>
+//             batchDelegateToSchema({
+//               schema: this.transformedSchema!,
+//               operation: 'query',
+//               fieldName: getQueryName(queryFieldNode),
+//               key: parent,
+//               argsFromKeys: createArgsFromKeysFunction(queryFieldNode),
+//               valuesFromResults: (results, keys) =>
+//                 mapChildrenToParents(
+//                   results,
+//                   keys,
+//                   fieldConfig.joinOn,
+//                   isListType(info.returnType)
+//                 ),
+//               context,
+//               info,
+//               transforms: [selectChildKeys],
+//             }),
+//         } as IResolvers;
+//       })
+//     );
+//   }
+// }
+
+export function createSelectionSet(queryFieldNode: FieldNode) {
+  const fields = new Set<string>();
+  visit(queryFieldNode, {
+    Variable: node => {
+      fields.add(node.name.value);
+    },
+    Field: (node, key, parent, path, ancestors) => {
+      ancestors.length > 4 && fields.add(node.alias?.value || node.name.value);
+    },
+  });
+  return `{ ${Array.from(fields).join(' ')} }`;
 }
 
-const createResolvers = (resolversConfig: GraphQLJoinConfig['resolvers']) =>
-  _.mapValues(resolversConfig, (typeConfig, type) =>
-    _.mapValues(typeConfig, (fieldConfig, field) => {
-      const selectChildKeys = addChildKeyFieldsToSelectionSetTransform(
-        field,
-        _.isArray(fieldConfig.joinOn)
-          ? fieldConfig.joinOn.map(mapping => mapping.child)
-          : [fieldConfig.joinOn.child]
-      );
-      return {
-        selectionSet: fieldConfig.selectionSet,
-        resolve: (parent, args, context, info) =>
-          batchDelegateToSchema({
-            schema: info.schema,
-            operation: 'query',
-            fieldName: fieldConfig.queryName,
-            key: parent,
-            argsFromKeys: fieldConfig.args,
-            valuesFromResults: (results, keys) =>
-              mapChildrenToParents(
-                results,
-                keys,
-                fieldConfig.joinOn,
-                isListType(info.returnType)
-              ),
-            context,
-            info,
-            transforms: [selectChildKeys],
-          }),
-      } as IResolvers;
-    })
-  );
+export function getQueryName(queryFieldNode: FieldNode) {
+  return queryFieldNode.name.value;
+}
 
-export const addChildKeyFieldsToSelectionSetTransform = (
-  queryName: string,
-  childKeys: string[]
-) =>
-  new WrapQuery(
-    [queryName],
-    selectionSet => {
-      const a = {
-        ...selectionSet,
-        selections: selectionSet.selections.concat(
-          childKeys.map(key => ({
-            kind: Kind.FIELD,
-            name: {
-              kind: Kind.NAME,
-              value: key,
-            },
-          }))
-        ),
-      };
-      console.log(JSON.stringify(a, null, 2));
-      return a;
+export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
+  const variables = new Set<string>();
+  visit(queryFieldNode, {
+    Variable: node => {
+      variables.add(node.name.value);
     },
-    result => {
-      console.log(result);
-      return result;
-    }
-  );
-
-export const mapChildrenToParents = (
-  children: any[],
-  parents: readonly any[],
-  joinMapping: JoinMapping,
-  listType: boolean
-) => {
-  if (!_.isArray(joinMapping)) {
-    const keyToChildren = _.groupBy(
-      children,
-      child => child[joinMapping.child]
+  });
+  const variableValues = new Map<string, any[]>();
+  return (parents: readonly any[]) => {
+    variables.forEach(variable =>
+      variableValues.set(
+        variable,
+        _(parents)
+          .map(parent => _.get(parent, variable))
+          .uniq()
+          .filter(val => val)
+          .value()
+      )
     );
-    return parents.map(
-      listType
-        ? keyToChildren[joinMapping.parent]
-        : keyToChildren[joinMapping.parent][0]
-    );
-  } else {
-    return children;
-  }
-};
+    return visit(queryFieldNode, {
+      leave: {
+        Argument: node => ({[node.name.value]: node.value}),
+        ObjectValue: node =>
+          node.fields.reduce((obj, field) => {
+            obj[field.name.value] = field.value;
+            return obj;
+          }, {} as Record<string, any>),
+        ListValue: node => node.values,
+        Variable: node => variableValues.get(node.name.value),
+      },
+    }).arguments;
+  };
+}

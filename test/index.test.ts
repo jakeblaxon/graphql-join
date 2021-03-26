@@ -1,6 +1,7 @@
 import {Kind, parse} from 'graphql';
 import {
   createArgsFromKeysFunction,
+  createKeyMapping,
   createSelectionSet,
   getQueryName,
 } from '../src';
@@ -15,64 +16,68 @@ function getQueryFieldNode(joinQuery: string) {
   return queryFieldNode;
 }
 
+const joinQuery = `#graphql
+    books(
+        filter: {
+            and: [
+                { title: { in: $bookTitle } }
+                { author: { in: $bookAuthor } }
+            ]
+        }
+    ) {
+        bookTitle: title
+    }
+`;
+const joinQueryNode = getQueryFieldNode(joinQuery);
+
+describe('createKeyMapping', () => {
+  it('should create key map', () => {
+    const result = createKeyMapping(joinQueryNode);
+    expect(result).toEqual({title: 'bookTitle'});
+  });
+});
+
 describe('createSelectionSet', () => {
   it('should select all variables', () => {
-    const joinQuery = `#graphql
-        books(
-            filter: {
-                and: [
-                    { title: { in: $bookTitle } }
-                    { author: { in: $bookAuthor } }
-                ]
-            }
-        ) {
-            bookTitle: title
-        }
-    `;
-    const result = createSelectionSet(getQueryFieldNode(joinQuery));
+    const result = createSelectionSet(joinQueryNode);
     expect(result).toEqual('{ bookTitle bookAuthor }');
   });
 });
 
 describe('getQueryName', () => {
   it('should return the name of the query', () => {
-    const joinQuery = `#graphql
-          books(
-              filter: {
-                  and: [
-                      { title: { in: $bookTitle } }
-                      { author: { in: $bookAuthor } }
-                  ]
-              }
-          ) {
-              bookTitle: title
-          }
-      `;
-    const result = getQueryName(getQueryFieldNode(joinQuery));
+    const result = getQueryName(joinQueryNode);
     expect(result).toEqual('books');
   });
 });
 
 describe('createArgsFromKeysFunction', () => {
   it('should return args correctly', () => {
-    const joinQuery = `#graphql
-            books(
-                filter: {
-                    and: [
-                        { title: { in: $bookTitle } }
-                        { author: { in: $bookAuthor } }
-                    ]
-                }
-            ) {
-                bookTitle: title
-            }
-        `;
-    const result = createArgsFromKeysFunction(getQueryFieldNode(joinQuery));
+    const result = createArgsFromKeysFunction(joinQueryNode);
     const args = [
       {bookTitle: 'bookTitle 1', bookAuthor: 'bookAuthor 1'},
       {bookTitle: 'bookTitle 2', bookAuthor: 'bookAuthor 2'},
       {bookTitle: 'bookTitle 3', bookAuthor: 'bookAuthor 3'},
     ];
-    console.log(JSON.stringify(result(args), null, 2));
+    expect(result(args)).toEqual([
+      {
+        filter: {
+          and: [
+            {
+              title: {
+                in: ['bookTitle 1', 'bookTitle 2', 'bookTitle 3'],
+              },
+            },
+            {
+              author: {
+                in: ['bookAuthor 1', 'bookAuthor 2', 'bookAuthor 3'],
+              },
+            },
+          ],
+        },
+      },
+    ]);
   });
 });
+
+describe('addRequiredChildFieldsToRequest', () => {});

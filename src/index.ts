@@ -120,8 +120,8 @@ export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
       variables.add(node.name.value);
     },
   });
-  const variableValues = new Map<string, any[]>();
-  return (parents: readonly any[]) => {
+  const variableValues = new Map<string, unknown[]>();
+  return (parents: readonly unknown[]) => {
     variables.forEach(variable =>
       variableValues.set(
         variable,
@@ -139,7 +139,7 @@ export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
           node.fields.reduce((obj, field) => {
             obj[field.name.value] = field.value;
             return obj;
-          }, {} as Record<string, any>),
+          }, {} as Record<string, unknown>),
         ListValue: node => node.values,
         Variable: node => variableValues.get(node.name.value),
       },

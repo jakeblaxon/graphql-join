@@ -1,81 +1,52 @@
-import {Kind, parse} from 'graphql';
-import {
-  createArgsFromKeysFunction,
-  createKeyMapping,
-  createSelectionSet,
-  getQueryName,
-} from '../src';
+import {mergeSchemas} from '@graphql-tools/merge';
+import {wrapSchema} from '@graphql-tools/wrap';
+import {execute, parse} from 'graphql';
+import GraphQLJoin from '../src';
+import {productSchema} from './fixtures/products';
+import {reviewSchema} from './fixtures/reviews';
 
-function getQueryFieldNode(joinQuery: string) {
-  const def = parse(`{${joinQuery}}`).definitions[0];
-  const queryFieldNode =
-    def.kind === Kind.OPERATION_DEFINITION &&
-    def.selectionSet.selections[0].kind === Kind.FIELD &&
-    def.selectionSet.selections[0];
-  if (!queryFieldNode) throw Error('invalid joinQuery config');
-  return queryFieldNode;
-}
+const mergedSchema = mergeSchemas({
+  schemas: [productSchema, reviewSchema],
+});
 
-const joinQuery = `#graphql
-    books(
-        filter: {
-            and: [
-                { title: { in: $bookTitle } }
-                { author: { in: $bookAuthor } }
-            ]
+describe('GraphQLJoin', () => {
+  it('works', async () => {
+    const graphqlJoinTransform = new GraphQLJoin({
+      typeDefs: `#graphql
+        extend type Review {
+          product: Product
         }
-    ) {
-        bookTitle: title
-    }
-`;
-const joinQueryNode = getQueryFieldNode(joinQuery);
-
-describe('createKeyMapping', () => {
-  it('should create key map', () => {
-    const result = createKeyMapping(joinQueryNode);
-    expect(result).toEqual({title: 'bookTitle'});
-  });
-});
-
-describe('createSelectionSet', () => {
-  it('should select all variables', () => {
-    const result = createSelectionSet(joinQueryNode);
-    expect(result).toEqual('{ bookTitle bookAuthor }');
-  });
-});
-
-describe('getQueryName', () => {
-  it('should return the name of the query', () => {
-    const result = getQueryName(joinQueryNode);
-    expect(result).toEqual('books');
-  });
-});
-
-describe('createArgsFromKeysFunction', () => {
-  it('should return args correctly', () => {
-    const result = createArgsFromKeysFunction(joinQueryNode);
-    const args = [
-      {bookTitle: 'bookTitle 1', bookAuthor: 'bookAuthor 1'},
-      {bookTitle: 'bookTitle 2', bookAuthor: 'bookAuthor 2'},
-      {bookTitle: 'bookTitle 3', bookAuthor: 'bookAuthor 3'},
-    ];
-    expect(result(args)).toEqual({
-      filter: {
-        and: [
-          {
-            title: {
-              in: ['bookTitle 1', 'bookTitle 2', 'bookTitle 3'],
-            },
-          },
-          {
-            author: {
-              in: ['bookAuthor 1', 'bookAuthor 2', 'bookAuthor 3'],
-            },
-          },
-        ],
+      `,
+      resolvers: {
+        Review: {
+          product: `#graphql
+            getProductsById(ids: $productId) { productId: upc }
+          `,
+        },
       },
     });
+    const schema = wrapSchema({
+      schema: mergedSchema,
+      transforms: [graphqlJoinTransform],
+    });
+    const result = await execute(
+      schema,
+      parse(`#graphql
+        {
+          getReviewsById(ids: ["1", "2", "3", "4"]) {
+            id
+            body
+            productId
+            product {
+              upc
+              name
+              price
+              weight
+            }
+          }
+        }
+      `)
+    );
+    console.log(JSON.stringify(result, null, 2));
   });
 });
-
-describe('addRequiredChildFieldsToRequest', () => {});

@@ -113,7 +113,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Error: Field corresponding to $upcs not found in type Product.'
+      'graphql-join config error for resolver [Product.reviews]: Field corresponding to $upcs not found in type Product.'
     );
   });
 
@@ -128,6 +128,21 @@ describe('validateFieldConfig', () => {
       )
     ).toThrow(
       'graphql-join config error for resolver [Product.reviews]: Variable "$price" of type "[Int!]!" used in position expecting type "[String!]!".'
+    );
+  });
+
+  it('rejects query with missing selection set', () => {
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc)',
+        'Product',
+        'reviews',
+        '',
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Field "getReviewsByProductId" of type "[Review!]!" must have a selection of subfields. ' +
+        'Did you mean "getReviewsByProductId { ... }"?'
     );
   });
 
@@ -155,7 +170,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Error: Field corresponding to [productId] in selection set not found in type [Product]. ' +
+      'graphql-join config error for resolver [Product.reviews]: Field corresponding to [productId] in selection set not found in type [Product]. ' +
         'Use an alias to map the child field to the corresponding parent field.'
     );
     expect(() =>
@@ -167,8 +182,56 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Error: Field corresponding to [upcs] in selection set not found in type [Product]. ' +
+      'graphql-join config error for resolver [Product.reviews]: Field corresponding to [upcs] in selection set not found in type [Product]. ' +
         'Make sure the alias is correctly spelled.'
+    );
+  });
+
+  // it('rejects selection fields whose corresponding parent field type mismatches with the child field type', () => {
+  //   expect(() =>
+  //     validateFieldConfig(
+  //       'getReviewsByProductId(productIds: $upc) { price: productId }',
+  //       'Product',
+  //       'reviews',
+  //       '',
+  //       schema
+  //     )
+  //   ).toThrow(
+  //     'graphql-join config error for resolver [Product.reviews]: Error: Field corresponding to [productId] in selection set not found in type [Product]. ' +
+  //       'Use an alias to map the child field to the corresponding parent field.'
+  //   );
+  // });
+
+  it('rejects query with scalar return type (when unwrapped)', () => {
+    const schema = makeExecutableSchema({
+      typeDefs: `#graphql
+      type Query {
+        getScalarList: [String]!
+      }
+    
+      type Product {
+        upc: String!
+        name: String
+        price: Int
+        weight: Int
+      }
+    `,
+    });
+    const typeExtensions = `#graphql
+      extend type Product {
+        strings: [String]
+      }
+    `;
+    expect(() =>
+      validateFieldConfig(
+        'getScalarList',
+        'Product',
+        'reviews',
+        typeExtensions,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Query must return an object or list of objects but instead returns [String]!.'
     );
   });
 });

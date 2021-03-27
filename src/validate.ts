@@ -1,17 +1,5 @@
 import {
-  DocumentNode,
-  FieldNode,
-  GraphQLList,
-  GraphQLNamedType,
-  GraphQLNonNull,
-  GraphQLNullableType,
-  GraphQLObjectType,
-  GraphQLScalarType,
   GraphQLSchema,
-  GraphQLType,
-  isInputObjectType,
-  isLeafType,
-  isWrappingType,
   Kind,
   NamedTypeNode,
   OperationDefinitionNode,
@@ -26,20 +14,32 @@ import {
 export function validateFieldConfig(
   fieldConfig: string,
   typeName: string,
-  field: string,
+  fieldName: string,
   typeDefs: string,
   schema: GraphQLSchema
 ) {
-  //   const returnType = schema.getQueryType()?.getFields()[queryNode.name.value]
-  //     ?.type;
-  //   if (!returnType) throw Error();
-  //   const leafReturnType = getLeafType(returnType);
+  class ValidationError extends Error {
+    constructor(message: string) {
+      super(
+        `graphql-join config error for resolver [${typeName}.${fieldName}]: ${message}`
+      );
+    }
+  }
 
-  const document = parse(`{${fieldConfig}}`);
+  let document;
+  try {
+    document = parse(`{${fieldConfig}}`);
+  } catch (e) {
+    throw new ValidationError(e);
+  }
+
   const operationDefinition =
     document.definitions[0].kind === Kind.OPERATION_DEFINITION &&
     document.definitions[0];
-  if (!operationDefinition) throw Error();
+  if (!operationDefinition)
+    throw new ValidationError('Unable to find operation definition for query.');
+  if (operationDefinition.selectionSet.selections.length > 1)
+    throw new ValidationError('Only one query field is allowed.');
 
   const typeNode = schema.getType(typeName)?.astNode;
   if (typeNode?.kind !== Kind.OBJECT_TYPE_DEFINITION) throw Error();
@@ -58,20 +58,20 @@ export function validateFieldConfig(
   };
 
   const errors = validate(schema, newDocument);
-  console.log(errors);
+  if (errors.length > 0) throw new ValidationError(errors[0].message);
 
-  return getQueryFieldNode(fieldConfig);
-}
-
-function getQueryFieldNode(fieldConfig: string) {
-  const document = parse(`{${fieldConfig}}`);
   const queryFieldNode =
-    document.definitions[0].kind === Kind.OPERATION_DEFINITION &&
-    document.definitions[0].selectionSet.selections[0].kind === Kind.FIELD &&
-    document.definitions[0].selectionSet.selections[0];
-  if (!queryFieldNode) throw Error('invalid joinQuery config');
+    operationDefinition.selectionSet.selections[0].kind === Kind.FIELD &&
+    operationDefinition.selectionSet.selections[0];
+  if (!queryFieldNode) throw Error();
+
   return queryFieldNode;
 }
+
+//   const returnType = schema.getQueryType()?.getFields()[queryNode.name.value]
+//     ?.type;
+//   if (!returnType) throw Error();
+//   const leafReturnType = getLeafType(returnType);
 
 function createVariableDefinitions(
   operationDefinition: OperationDefinitionNode,

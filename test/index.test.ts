@@ -16,10 +16,16 @@ describe('GraphQLJoin', () => {
         extend type Review {
           product: Product
         }
+        extend type Product {
+          reviews: [Review!]!
+        }
       `,
       resolvers: {
         Review: {
           product: 'getProductsById(ids: $productId) { productId: upc }',
+        },
+        Product: {
+          reviews: 'getReviewsByProductId(productIds: $upc) { upc: productId }',
         },
       },
     });
@@ -34,17 +40,92 @@ describe('GraphQLJoin', () => {
           getReviewsById(ids: ["1", "2", "3", "4"]) {
             id
             body
-            
             product {
-              
               name
               price
               weight
+              reviews {
+                  id
+                  body
+              }
             }
           }
         }
       `)
     );
-    console.log(JSON.stringify(result, null, 2));
+    expect(result).toEqual({
+      data: {
+        getReviewsById: [
+          {
+            id: '1',
+            body: 'Love it!',
+            product: {
+              name: 'Table',
+              price: 899,
+              weight: 100,
+              reviews: [
+                {
+                  id: '1',
+                  body: 'Love it!',
+                },
+                {
+                  id: '4',
+                  body: 'Prefer something else.',
+                },
+              ],
+            },
+          },
+          {
+            id: '2',
+            body: 'Too expensive.',
+            product: {
+              name: 'Couch',
+              price: 1299,
+              weight: 1000,
+              reviews: [
+                {
+                  id: '2',
+                  body: 'Too expensive.',
+                },
+              ],
+            },
+          },
+          {
+            id: '3',
+            body: 'Could be better.',
+            product: {
+              name: 'Chair',
+              price: 54,
+              weight: 50,
+              reviews: [
+                {
+                  id: '3',
+                  body: 'Could be better.',
+                },
+              ],
+            },
+          },
+          {
+            id: '4',
+            body: 'Prefer something else.',
+            product: {
+              name: 'Table',
+              price: 899,
+              weight: 100,
+              reviews: [
+                {
+                  id: '1',
+                  body: 'Love it!',
+                },
+                {
+                  id: '4',
+                  body: 'Prefer something else.',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
   });
 });

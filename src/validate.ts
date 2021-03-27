@@ -44,17 +44,24 @@ export function validateFieldConfig(
   const typeNode = schema.getType(typeName)?.astNode;
   if (typeNode?.kind !== Kind.OBJECT_TYPE_DEFINITION) throw Error();
 
-  const newOperationDefinition = {
-    ...operationDefinition,
-    variableDefinitions: createVariableDefinitions(
+  let variableDefinitions;
+  try {
+    variableDefinitions = createVariableDefinitions(
       operationDefinition,
       typeNode
-    ),
-  };
+    );
+  } catch (e) {
+    throw new ValidationError(e);
+  }
 
   const newDocument = {
     ...document,
-    definitions: [newOperationDefinition],
+    definitions: [
+      {
+        ...operationDefinition,
+        variableDefinitions,
+      },
+    ],
   };
 
   const errors = validate(schema, newDocument);
@@ -87,7 +94,10 @@ function createVariableDefinitions(
     const fieldNode = typeNode.fields?.find(
       field => field.name.value === variableName
     );
-    if (!fieldNode) throw Error();
+    if (!fieldNode)
+      throw Error(
+        `Field corresponding to $${variableName} not found in type ${typeNode.name.value}.`
+      );
     return {
       kind: Kind.VARIABLE_DEFINITION,
       variable: {

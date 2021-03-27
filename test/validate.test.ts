@@ -74,4 +74,74 @@ describe('validateFieldConfig', () => {
       'graphql-join config error for resolver [Product.reviews]: Only one query field is allowed.'
     );
   });
+
+  it('rejects unknown query names', () => {
+    expect(() =>
+      validateFieldConfig(
+        'unknownQueryName(productIds: $upc) { upc: productId }',
+        'Product',
+        'reviews',
+        '',
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Cannot query field "unknownQueryName" on type "Query"'
+    );
+  });
+
+  it('rejects invalid input types', () => {
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc, all: true) { upc: productId }',
+        'Product',
+        'reviews',
+        '',
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Unknown argument "all" on field "Query.getReviewsByProductId".'
+    );
+  });
+
+  it('rejects query variables with no corresponding field name', () => {
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upcs) { upc: productId }',
+        'Product',
+        'reviews',
+        '',
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Error: Field corresponding to $upcs not found in type Product.'
+    );
+  });
+
+  it('rejects query variables whose corresponding field type mismatches with the input type', () => {
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $price) { upc: productId }',
+        'Product',
+        'reviews',
+        '',
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Variable "$price" of type "[Int!]!" used in position expecting type "[String!]!".'
+    );
+  });
+
+  it('rejects unknown selection fields', () => {
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upc }',
+        'Product',
+        'reviews',
+        '',
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Cannot query field "upc" on type "Review".'
+    );
+  });
 });

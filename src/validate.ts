@@ -55,7 +55,7 @@ export function validateFieldConfig(
 
   try {
     validateArguments(operationDefinition, typeNode, document, schema);
-    validateReturnType(queryFieldNode, schema);
+    validateReturnType(queryFieldNode, typeName, fieldName, typeDefs, schema);
     validateSelections(queryFieldNode, typeNode, schema);
   } catch (e) {
     throw new ValidationError(e.message);
@@ -123,13 +123,42 @@ function validateArguments(
   if (errors.length > 0) throw new Error(errors[0].message);
 }
 
-function validateReturnType(queryFieldNode: FieldNode, schema: GraphQLSchema) {
-  const returnType = unwrapType(
-    schema.getQueryType()?.getFields()[queryFieldNode.name.value]?.type
-  );
-  if (!returnType || !isObjectType(returnType))
+function validateReturnType(
+  queryFieldNode: FieldNode,
+  typeName: string,
+  fieldName: string,
+  typeDefs: string,
+  schema: GraphQLSchema
+) {
+  const returnType = schema.getQueryType()?.getFields()[
+    queryFieldNode.name.value
+  ]?.type;
+  if (!returnType) throw new Error('Could not find return type for query.');
+  const unwrappedReturnType = unwrapType(returnType);
+  if (!isObjectType(unwrappedReturnType))
     throw Error(
-      `Query must return an object or list of objects but instead returns ${returnType}`
+      `Query must return an object or list of objects but instead returns ${returnType.toString()}.`
+    );
+  let typeDefsDocument;
+  try {
+    typeDefsDocument = parse(typeDefs);
+  } catch (e) {
+    throw Error(`typeDefs is invalid: ${e}`);
+  }
+  let intendedType;
+  visit(typeDefsDocument, {
+    ObjectTypeDefinition: node => (node.name.value === typeName ? node : false),
+    ObjectTypeExtension: node => (node.name.value === typeName ? node : false),
+    FieldDefinition: node =>
+      node.name.value === fieldName ? (intendedType = node.type) : undefined,
+  });
+  if (!intendedType)
+    throw Error(`Field [${typeName}.${fieldName}] not found in typeDefs.`);
+  if (unwrapTypeNode(intendedType).name.value !== unwrappedReturnType.name)
+    throw Error(
+      `Query does not return the intended entity type ${
+        unwrapTypeNode(intendedType).name.value
+      } for [${typeName}.${fieldName}]. Returns ${returnType.toString()}.`
     );
 }
 
@@ -170,13 +199,12 @@ function unwrapTypeNode(type: TypeNode): NamedTypeNode {
 }
 
 function unwrapType(
-  type: GraphQLOutputType | undefined
+  type: GraphQLOutputType
 ):
   | GraphQLScalarType
   | GraphQLObjectType
   | GraphQLInterfaceType
   | GraphQLUnionType
-  | GraphQLEnumType
-  | undefined {
+  | GraphQLEnumType {
   return type && isWrappingType(type) ? unwrapType(type.ofType) : type;
 }

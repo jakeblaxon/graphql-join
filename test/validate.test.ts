@@ -4,9 +4,8 @@ import {validateFieldConfig} from '../src/validate';
 const schema = makeExecutableSchema({
   typeDefs: `#graphql
   type Query {
-    getProductsById(ids: [String!]!): [Product!]!
-    getReviewsById(ids: [ID!]!): [Review!]!
     getReviewsByProductId(productIds: [String!]!): [Review!]!
+    getUsersByName(names: [String]): [User]
   }
 
   type Product {
@@ -21,8 +20,18 @@ const schema = makeExecutableSchema({
     body: String
     productId: String!
   }
+
+  type User {
+    name: String
+  }
 `,
 });
+
+const typeDefs = `#graphql
+  extend type Product {
+    reviews: [Review!]!
+  }
+`;
 
 describe('validateFieldConfig', () => {
   it('rejects invalid sdl', () => {
@@ -31,7 +40,7 @@ describe('validateFieldConfig', () => {
         'getReviewsByProductId() { upc: productId }',
         'Product',
         'reviews',
-        '',
+        typeDefs,
         schema
       )
     ).toThrow(
@@ -45,7 +54,7 @@ describe('validateFieldConfig', () => {
         '{ getReviewsByProductId(productIds: $upc) { upc: productId } }',
         'Product',
         'reviews',
-        '',
+        typeDefs,
         schema
       )
     ).toThrow(
@@ -56,7 +65,7 @@ describe('validateFieldConfig', () => {
         'query { getReviewsByProductId(productIds: $upc) { upc: productId } }',
         'Product',
         'reviews',
-        '',
+        typeDefs,
         schema
       )
     ).toThrow(
@@ -67,7 +76,7 @@ describe('validateFieldConfig', () => {
         'query testQuery { getReviewsByProductId(productIds: $upc) { upc: productId } }',
         'Product',
         'reviews',
-        '',
+        typeDefs,
         schema
       )
     ).toThrow(
@@ -81,7 +90,7 @@ describe('validateFieldConfig', () => {
         'unknownQueryName(productIds: $upc) { upc: productId }',
         'Product',
         'reviews',
-        '',
+        typeDefs,
         schema
       )
     ).toThrow(
@@ -95,7 +104,7 @@ describe('validateFieldConfig', () => {
         'getReviewsByProductId(productIds: $upc, all: true) { upc: productId }',
         'Product',
         'reviews',
-        '',
+        typeDefs,
         schema
       )
     ).toThrow(
@@ -109,7 +118,7 @@ describe('validateFieldConfig', () => {
         'getReviewsByProductId(productIds: $upcs) { upc: productId }',
         'Product',
         'reviews',
-        '',
+        typeDefs,
         schema
       )
     ).toThrow(
@@ -123,7 +132,7 @@ describe('validateFieldConfig', () => {
         'getReviewsByProductId(productIds: $price) { upc: productId }',
         'Product',
         'reviews',
-        '',
+        typeDefs,
         schema
       )
     ).toThrow(
@@ -137,7 +146,7 @@ describe('validateFieldConfig', () => {
         'getReviewsByProductId(productIds: $upc)',
         'Product',
         'reviews',
-        '',
+        typeDefs,
         schema
       )
     ).toThrow(
@@ -152,7 +161,7 @@ describe('validateFieldConfig', () => {
         'getReviewsByProductId(productIds: $upc) { upc }',
         'Product',
         'reviews',
-        '',
+        typeDefs,
         schema
       )
     ).toThrow(
@@ -166,7 +175,7 @@ describe('validateFieldConfig', () => {
         'getReviewsByProductId(productIds: $upc) { productId }',
         'Product',
         'reviews',
-        '',
+        typeDefs,
         schema
       )
     ).toThrow(
@@ -178,7 +187,7 @@ describe('validateFieldConfig', () => {
         'getReviewsByProductId(productIds: $upc) { upcs: productId }',
         'Product',
         'reviews',
-        '',
+        typeDefs,
         schema
       )
     ).toThrow(
@@ -193,7 +202,7 @@ describe('validateFieldConfig', () => {
   //       'getReviewsByProductId(productIds: $upc) { price: productId }',
   //       'Product',
   //       'reviews',
-  //       '',
+  //       typeDefs,
   //       schema
   //     )
   //   ).toThrow(
@@ -202,18 +211,14 @@ describe('validateFieldConfig', () => {
   //   );
   // });
 
-  it('rejects query with scalar return type (when unwrapped)', () => {
+  it('rejects query with non-object return type (when unwrapped)', () => {
     const schema = makeExecutableSchema({
       typeDefs: `#graphql
       type Query {
         getScalarList: [String]!
       }
-    
       type Product {
         upc: String!
-        name: String
-        price: Int
-        weight: Int
       }
     `,
     });
@@ -232,6 +237,20 @@ describe('validateFieldConfig', () => {
       )
     ).toThrow(
       'graphql-join config error for resolver [Product.reviews]: Query must return an object or list of objects but instead returns [String]!.'
+    );
+  });
+
+  it('rejects when the unwrapped query return type does not match the intended type', () => {
+    expect(() =>
+      validateFieldConfig(
+        'getUsersByName(names: $upc) { upc: name }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Query does not return the intended entity type Review for [Product.reviews]. Returns [User].'
     );
   });
 });

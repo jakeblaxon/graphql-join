@@ -18,6 +18,7 @@ import {
   GraphQLEnumType,
   DocumentNode,
   OperationDefinitionNode,
+  isScalarType,
 } from 'graphql';
 
 export function validateFieldConfig(
@@ -195,6 +196,10 @@ function validateSelections(
       throw Error(
         `Could not find type definition for [${childType.name}.${selection.name.value}].`
       );
+    if (!isScalarType(unwrapType(childFieldType)))
+      throw Error(
+        `Cannot join on key [${childType.name}.${selection.name.value}]. Join keys must be scalars or scalar lists.`
+      );
     if (
       unwrapType(childFieldType).name !==
       unwrapTypeNode(parentFieldNode.type).name.value
@@ -202,7 +207,7 @@ function validateSelections(
       throw Error(
         `Cannot join on keys [${typeNode.name.value}.${parentFieldName}] and [${
           childType.name
-        }.${selection.name.value}]. Their scalar values are different types: ${
+        }.${selection.name.value}]. They are different types: ${
           unwrapTypeNode(parentFieldNode.type).name.value
         } and ${unwrapType(childFieldType).name}.`
       );

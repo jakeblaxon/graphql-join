@@ -207,7 +207,56 @@ describe('validateFieldConfig', () => {
       )
     ).toThrow(
       'graphql-join config error for resolver [Product.reviews]: Cannot join on keys [Product.price] and [Review.productId]. ' +
-        'Their scalar values are different types: Int and String.'
+        'They are different types: Int and String.'
+    );
+  });
+
+  it('rejects selection fields that are not scalars or scalar lists', () => {
+    const schema = makeExecutableSchema({
+      typeDefs: `#graphql
+      type Query {
+        getReviewsByProductId(productIds: [String!]!): [Review!]!
+      }
+      type Product {
+        upc: String!
+        productIdWrapper: ProductIdWrapper
+      }
+      type Review {
+        productId: String
+        productIdWrapper: ProductIdWrapper
+      }
+      type ProductIdWrapper {
+        id: String
+      }
+    `,
+    });
+    const typeDefs = `#graphql
+      extend type Product {
+        reviews: [Review]
+      }
+    `;
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upc: productIdWrapper { id } }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Cannot join on key [Review.productIdWrapper]. Join keys must be scalars or scalar lists.'
+    );
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { productIdWrapper: productId }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Cannot join on keys [Product.productIdWrapper] and [Review.productId]. ' +
+        'They are different types: ProductIdWrapper and String.'
     );
   });
 
@@ -222,7 +271,7 @@ describe('validateFieldConfig', () => {
       }
     `,
     });
-    const typeExtensions = `#graphql
+    const typeDefs = `#graphql
       extend type Product {
         strings: [String]
       }
@@ -232,7 +281,7 @@ describe('validateFieldConfig', () => {
         'getScalarList',
         'Product',
         'reviews',
-        typeExtensions,
+        typeDefs,
         schema
       )
     ).toThrow(

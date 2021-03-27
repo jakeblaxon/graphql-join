@@ -211,6 +211,37 @@ describe('validateFieldConfig', () => {
     );
   });
 
+  // TODO implement feature
+  it.skip('allows ID type to map to String', () => {
+    const schema = makeExecutableSchema({
+      typeDefs: `#graphql
+      type Query {
+        getReviewsByProductId(productIds: [String!]!): [Review!]!
+      }
+      type Product {
+        upc: ID!
+      }
+      type Review {
+        productId: String
+      }
+    `,
+    });
+    const typeDefs = `#graphql
+      extend type Product {
+        reviews: [Review]
+      }
+    `;
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upc: productId }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toReturn();
+  });
+
   it('rejects selection fields that are not scalars or scalar lists', () => {
     const schema = makeExecutableSchema({
       typeDefs: `#graphql

@@ -55,8 +55,14 @@ export function validateFieldConfig(
 
   try {
     validateArguments(operationDefinition, typeNode, document, schema);
-    validateReturnType(queryFieldNode, typeName, fieldName, typeDefs, schema);
-    validateSelections(queryFieldNode, typeNode, schema);
+    const childType = validateReturnType(
+      queryFieldNode,
+      typeName,
+      fieldName,
+      typeDefs,
+      schema
+    );
+    validateSelections(queryFieldNode, typeNode, childType);
   } catch (e) {
     throw new ValidationError(e.message);
   }
@@ -160,12 +166,13 @@ function validateReturnType(
         unwrapTypeNode(intendedType).name.value
       } for [${typeName}.${fieldName}]. Returns ${returnType.toString()}.`
     );
+  return unwrappedReturnType;
 }
 
 function validateSelections(
   queryFieldNode: FieldNode,
   typeNode: ObjectTypeDefinitionNode,
-  schema: GraphQLSchema
+  childType: GraphQLObjectType
 ) {
   queryFieldNode.selectionSet?.selections.forEach(selection => {
     if (selection.kind !== Kind.FIELD) throw Error();
@@ -183,12 +190,22 @@ function validateSelections(
             : 'Use an alias to map the child field to the corresponding parent field.'
         }`
       );
-    // const unwrappedReturnType = unwrapType(returnType.);
-    // const leafReturnType = getLeafType(returnType);
-    //     const childFieldNode = schema.getType(t).fields?.find(
-    //       field => field.name.value === parentFieldName
-    //     );
-    //   unwrapType(parentFieldNode.type).name.value !== unwrapType(selection.)
+    const childFieldType = childType.getFields()[selection.name.value]?.type;
+    if (!childFieldType)
+      throw Error(
+        `Could not find type definition for [${childType.name}.${selection.name.value}].`
+      );
+    if (
+      unwrapType(childFieldType).name !==
+      unwrapTypeNode(parentFieldNode.type).name.value
+    )
+      throw Error(
+        `Cannot join on keys [${typeNode.name.value}.${parentFieldName}] and [${
+          childType.name
+        }.${selection.name.value}]. Their scalar values are different types: ${
+          unwrapTypeNode(parentFieldNode.type).name.value
+        } and ${unwrapType(childFieldType).name}.`
+      );
   });
 }
 

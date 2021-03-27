@@ -196,20 +196,20 @@ describe('validateFieldConfig', () => {
     );
   });
 
-  // it('rejects selection fields whose corresponding parent field type mismatches with the child field type', () => {
-  //   expect(() =>
-  //     validateFieldConfig(
-  //       'getReviewsByProductId(productIds: $upc) { price: productId }',
-  //       'Product',
-  //       'reviews',
-  //       typeDefs,
-  //       schema
-  //     )
-  //   ).toThrow(
-  //     'graphql-join config error for resolver [Product.reviews]: Error: Field corresponding to [productId] in selection set not found in type [Product]. ' +
-  //       'Use an alias to map the child field to the corresponding parent field.'
-  //   );
-  // });
+  it('rejects selection fields whose corresponding parent field type mismatches with the child field type', () => {
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { price: productId }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Cannot join on keys [Product.price] and [Review.productId]. ' +
+        'Their scalar values are different types: Int and String.'
+    );
+  });
 
   it('rejects query with non-object return type (when unwrapped)', () => {
     const schema = makeExecutableSchema({

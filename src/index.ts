@@ -4,8 +4,6 @@ import {
   GraphQLSchema,
   isListType,
   isNonNullType,
-  Kind,
-  parse,
   visit,
 } from 'graphql';
 import {batchDelegateToSchema} from '@graphql-tools/batch-delegate';
@@ -14,6 +12,7 @@ import {stitchSchemas} from '@graphql-tools/stitch';
 import {IResolvers} from '@graphql-tools/utils';
 import {WrapQuery} from '@graphql-tools/wrap';
 import _ from 'lodash';
+import {validateFieldConfig} from './validate';
 
 export interface GraphQLJoinConfig {
   typeDefs: string;
@@ -25,57 +24,49 @@ export interface GraphQLJoinConfig {
 }
 
 export default class GraphQLJoin implements Transform {
-  private transformedSchema: GraphQLSchema | null = null;
   constructor(private config: GraphQLJoinConfig) {}
-
-  public transformSchema(originalWrappingSchema: GraphQLSchema) {
-    return (this.transformedSchema = stitchSchemas({
-      subschemas: [originalWrappingSchema],
+  public transformSchema(originalSchema: GraphQLSchema) {
+    return stitchSchemas({
+      subschemas: [originalSchema],
       typeDefs: this.config.typeDefs,
-      resolvers: _.mapValues(this.config.resolvers, typeConfig =>
-        _.mapValues(typeConfig, fieldConfig =>
-          this.createFieldResolver(fieldConfig)
-        )
+      resolvers: _.mapValues(this.config.resolvers, (typeConfig, type) =>
+        _.mapValues(typeConfig, (fieldConfig, field) => {
+          const queryFieldNode = validateFieldConfig(
+            fieldConfig,
+            type,
+            field,
+            this.config.typeDefs,
+            originalSchema
+          );
+          createFieldResolver(queryFieldNode, originalSchema);
+        })
       ),
-    }));
-  }
-
-  private createFieldResolver(fieldConfig: string) {
-    const queryFieldNode = getQueryFieldNode(fieldConfig);
-    const argsFromKeys = createArgsFromKeysFunction(queryFieldNode);
-    const childSelectionSetTransform = createChildSelectionSet(queryFieldNode);
-    return {
-      selectionSet: createParentSelectionSet(queryFieldNode),
-      resolve: (parent, args, context, info) =>
-        batchDelegateToSchema({
-          schema: this.transformedSchema!,
-          operation: 'query',
-          fieldName: queryFieldNode.name.value,
-          key: parent,
-          context,
-          info,
-          transforms: [childSelectionSetTransform],
-          argsFromKeys,
-          valuesFromResults: (results, keys) =>
-            mapChildrenToParents(
-              results,
-              keys,
-              queryFieldNode,
-              info.returnType
-            ),
-        }),
-    } as IResolvers;
+    });
   }
 }
 
-function getQueryFieldNode(fieldConfig: string) {
-  const document = parse(`{${fieldConfig}}`);
-  const queryFieldNode =
-    document.definitions[0].kind === Kind.OPERATION_DEFINITION &&
-    document.definitions[0].selectionSet.selections[0].kind === Kind.FIELD &&
-    document.definitions[0].selectionSet.selections[0];
-  if (!queryFieldNode) throw Error('invalid joinQuery config');
-  return queryFieldNode;
+export function createFieldResolver(
+  queryFieldNode: FieldNode,
+  schema: GraphQLSchema
+) {
+  const argsFromKeys = createArgsFromKeysFunction(queryFieldNode);
+  const childSelectionSetTransform = createChildSelectionSet(queryFieldNode);
+  return {
+    selectionSet: createParentSelectionSet(queryFieldNode),
+    resolve: (parent, args, context, info) =>
+      batchDelegateToSchema({
+        schema,
+        operation: 'query',
+        fieldName: queryFieldNode.name.value,
+        key: parent,
+        context,
+        info,
+        transforms: [childSelectionSetTransform],
+        argsFromKeys,
+        valuesFromResults: (results, keys) =>
+          mapChildrenToParents(results, keys, queryFieldNode, info.returnType),
+      }),
+  } as IResolvers;
 }
 
 export function createParentSelectionSet(queryFieldNode: FieldNode) {

@@ -144,4 +144,31 @@ describe('validateFieldConfig', () => {
       'graphql-join config error for resolver [Product.reviews]: Cannot query field "upc" on type "Review".'
     );
   });
+
+  it('rejects selection fields with no corresponding field in the parent type', () => {
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { productId }',
+        'Product',
+        'reviews',
+        '',
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Error: Field corresponding to [productId] in selection set not found in type [Product]. ' +
+        'Use an alias to map the child field to the corresponding parent field.'
+    );
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upcs: productId }',
+        'Product',
+        'reviews',
+        '',
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Error: Field corresponding to [upcs] in selection set not found in type [Product]. ' +
+        'Make sure the alias is correctly spelled.'
+    );
+  });
 });

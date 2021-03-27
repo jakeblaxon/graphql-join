@@ -2,13 +2,13 @@ import {
   GraphQLSchema,
   Kind,
   NamedTypeNode,
-  OperationDefinitionNode,
   VariableDefinitionNode,
   parse,
   TypeNode,
   validate,
   visit,
   ObjectTypeDefinitionNode,
+  FieldNode,
 } from 'graphql';
 
 export function validateFieldConfig(
@@ -32,7 +32,6 @@ export function validateFieldConfig(
   } catch (e) {
     throw new ValidationError(e);
   }
-
   const operationDefinition =
     document.definitions[0].kind === Kind.OPERATION_DEFINITION &&
     document.definitions[0];
@@ -40,21 +39,21 @@ export function validateFieldConfig(
     throw new ValidationError('Unable to find operation definition for query.');
   if (operationDefinition.selectionSet.selections.length > 1)
     throw new ValidationError('Only one query field is allowed.');
-
+  const queryFieldNode = operationDefinition.selectionSet.selections[0];
+  if (!queryFieldNode || queryFieldNode.kind !== Kind.FIELD)
+    throw new ValidationError('Query type must be a field node.');
   const typeNode = schema.getType(typeName)?.astNode;
-  if (typeNode?.kind !== Kind.OBJECT_TYPE_DEFINITION) throw Error();
+  if (typeNode?.kind !== Kind.OBJECT_TYPE_DEFINITION)
+    throw new ValidationError(`Type ${typeName} must be an object type.`);
 
   let variableDefinitions;
   try {
-    variableDefinitions = createVariableDefinitions(
-      operationDefinition,
-      typeNode
-    );
+    variableDefinitions = createVariableDefinitions(queryFieldNode, typeNode);
   } catch (e) {
     throw new ValidationError(e);
   }
 
-  const newDocument = {
+  const errors = validate(schema, {
     ...document,
     definitions: [
       {
@@ -62,15 +61,14 @@ export function validateFieldConfig(
         variableDefinitions,
       },
     ],
-  };
-
-  const errors = validate(schema, newDocument);
+  });
   if (errors.length > 0) throw new ValidationError(errors[0].message);
 
-  const queryFieldNode =
-    operationDefinition.selectionSet.selections[0].kind === Kind.FIELD &&
-    operationDefinition.selectionSet.selections[0];
-  if (!queryFieldNode) throw Error();
+  try {
+    validateSelections(queryFieldNode, typeNode);
+  } catch (e) {
+    throw new ValidationError(e);
+  }
 
   return queryFieldNode;
 }
@@ -81,11 +79,11 @@ export function validateFieldConfig(
 //   const leafReturnType = getLeafType(returnType);
 
 function createVariableDefinitions(
-  operationDefinition: OperationDefinitionNode,
+  queryFieldNode: FieldNode,
   typeNode: ObjectTypeDefinitionNode
 ): Array<VariableDefinitionNode> {
   const variableNames = new Set<string>();
-  visit(operationDefinition, {
+  visit(queryFieldNode, {
     Variable: node => {
       variableNames.add(node.name.value);
     },
@@ -124,6 +122,29 @@ function createVariableDefinitions(
         },
       },
     };
+  });
+}
+
+function validateSelections(
+  queryFieldNode: FieldNode,
+  typeNode: ObjectTypeDefinitionNode
+) {
+  queryFieldNode.selectionSet?.selections.forEach(selection => {
+    if (selection.kind !== Kind.FIELD) throw Error();
+    const parentFieldName = selection.alias?.value || selection.name.value;
+    const fieldNode = typeNode.fields?.find(
+      field => field.name.value === parentFieldName
+    );
+    if (!fieldNode)
+      throw Error(
+        `Field corresponding to [${parentFieldName}] in selection set not found in type [${
+          typeNode.name.value
+        }]. ${
+          selection.alias
+            ? 'Make sure the alias is correctly spelled.'
+            : 'Use an alias to map the child field to the corresponding parent field.'
+        }`
+      );
   });
 }
 

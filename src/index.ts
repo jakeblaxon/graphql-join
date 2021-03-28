@@ -1,6 +1,5 @@
 import {
   FieldNode,
-  GraphQLOutputType,
   GraphQLSchema,
   isListType,
   isNonNullType,
@@ -76,7 +75,14 @@ export function createFieldResolver(
         transforms: [childSelectionSetTransform],
         argsFromKeys,
         valuesFromResults: (results, keys) =>
-          mapChildrenToParents(results, keys, queryFieldNode, info.returnType),
+          mapChildrenToParents(
+            results,
+            keys,
+            queryFieldNode,
+            isListType(info.returnType) ||
+              (isNonNullType(info.returnType) &&
+                isListType(info.returnType.ofType))
+          ),
       }),
   } as IResolvers;
 }
@@ -139,7 +145,7 @@ export function mapChildrenToParents(
   children: readonly Entity[],
   parents: readonly Entity[],
   queryFieldNode: FieldNode,
-  returnType: GraphQLOutputType
+  toManyRelation: boolean
 ) {
   const childKeyFields: string[] = [];
   const parentKeyFields: string[] = [];
@@ -149,9 +155,6 @@ export function mapChildrenToParents(
       parent && parentKeyFields.push(node.alias?.value || node.name.value);
     },
   });
-  const toManyRelation =
-    isListType(returnType) ||
-    (isNonNullType(returnType) && isListType(returnType.ofType));
   const hashFn = (entity: Record<string, Entity>, keyFields: string[]) =>
     childKeyFields.length === 1
       ? entity[keyFields[0]]

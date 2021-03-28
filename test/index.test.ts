@@ -6,6 +6,7 @@ import {
   createChildSelectionSet,
   createParentSelectionSet,
   GraphQLJoin,
+  mapChildrenToParents,
 } from '../src';
 
 const typeExtensions = `#graphql
@@ -418,5 +419,100 @@ describe('createArgsFromKeysFunction', () => {
     expect(result(parents)).toEqual({
       where: {title: ['title 1']},
     });
+  });
+});
+
+describe('mapChildrenToParents', () => {
+  it('maps parent to null or empty list when no matching children are found', () => {
+    const queryFieldNode = getQueryFieldNode(`#graphql
+      books { title }
+    `);
+    expect(
+      mapChildrenToParents([], [{title: 'title 1'}], queryFieldNode, false)
+    ).toEqual([null]);
+    expect(
+      mapChildrenToParents([], [{title: 'title 1'}], queryFieldNode, true)
+    ).toEqual([[]]);
+  });
+
+  it('matches to single child when toManyRelation is false', () => {
+    const queryFieldNode = getQueryFieldNode(`#graphql
+      books { title }
+    `);
+    const result = mapChildrenToParents(
+      [
+        {id: 1, title: 'title 2'},
+        {id: 2, title: 'title 1'},
+      ],
+      [{title: 'title 1'}, {title: 'title 2'}],
+      queryFieldNode,
+      false
+    );
+    expect(result).toEqual([
+      {id: 2, title: 'title 1'},
+      {id: 1, title: 'title 2'},
+    ]);
+  });
+
+  it('matches to list of children when toManyRelation is true', () => {
+    const queryFieldNode = getQueryFieldNode(`#graphql
+      books { title }
+    `);
+    const result = mapChildrenToParents(
+      [
+        {id: 1, title: 'title 2'},
+        {id: 2, title: 'title 1'},
+        {id: 3, title: 'title 1'},
+      ],
+      [{title: 'title 1'}, {title: 'title 2'}],
+      queryFieldNode,
+      true
+    );
+    expect(result).toEqual([
+      [
+        {id: 2, title: 'title 1'},
+        {id: 3, title: 'title 1'},
+      ],
+      [{id: 1, title: 'title 2'}],
+    ]);
+  });
+
+  it('matches using aliases', () => {
+    const queryFieldNode = getQueryFieldNode(`#graphql
+      books { bookTitle: title }
+    `);
+    const result = mapChildrenToParents(
+      [
+        {id: 1, title: 'title 2'},
+        {id: 2, title: 'title 1'},
+      ],
+      [{bookTitle: 'title 1'}],
+      queryFieldNode,
+      false
+    );
+    expect(result).toEqual([{id: 2, title: 'title 1'}]);
+  });
+
+  it('matches using all join keys', () => {
+    const queryFieldNode = getQueryFieldNode(`#graphql
+      books { title author }
+    `);
+    const result = mapChildrenToParents(
+      [
+        {id: 1, title: 'title 1', author: 'author 1'},
+        {id: 2, title: 'title 1', author: 'author 2'},
+        {id: 3, title: 'title 2', author: 'author 2'},
+      ],
+      [
+        {title: 'title 1', author: 'author 1'},
+        {title: 'title 2', author: 'author 2'},
+      ],
+      queryFieldNode,
+      true
+    );
+    expect(result).toEqual([
+      [{id: 1, title: 'title 1', author: 'author 1'}],
+      [{id: 3, title: 'title 2', author: 'author 2'}],
+    ]);
   });
 });

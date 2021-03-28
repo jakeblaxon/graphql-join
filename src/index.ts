@@ -159,9 +159,25 @@ export function mapChildrenToParents(
     childKeyFields.length === 1
       ? entity[keyFields[0]]
       : JSON.stringify(_.at(entity, keyFields));
-  const childrenByKey = _.groupBy(children, child =>
-    hashFn(child, childKeyFields)
+  const childrenKeyPairs = children.map(child => ({
+    child,
+    keyOrKeyList: hashFn(child, childKeyFields),
+  }));
+  const childKeyIsList = _.some(childrenKeyPairs, pair =>
+    _.isArray(pair.keyOrKeyList)
   );
+  const childrenByKey = _(childrenKeyPairs)
+    .flatMap(pair =>
+      childKeyIsList
+        ? (pair.keyOrKeyList || []).map((value: any) => ({
+            key: value,
+            value: pair.child,
+          }))
+        : {key: pair.keyOrKeyList, value: pair.child}
+    )
+    .groupBy(childKeyPair => childKeyPair.key)
+    .mapValues(group => group.map(elt => elt.value))
+    .value();
   return parents
     .map(parent => childrenByKey[hashFn(parent, parentKeyFields)])
     .map(group => (toManyRelation ? group ?? [] : group?.[0] ?? null));

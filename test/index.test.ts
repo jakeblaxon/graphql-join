@@ -312,6 +312,31 @@ describe('mapChildrenToParents', () => {
       [{id: 3, title: 'title 2', author: 'author 2'}],
     ]);
   });
+
+  it('matches by containment if child key type is a list', () => {
+    const queryFieldNode = getQueryFieldNode(`#graphql
+      books { title: titles }
+    `);
+    const result = mapChildrenToParents(
+      [
+        {id: 1, titles: ['title 1', null]},
+        {id: 2, titles: ['title 1', 'title 2']},
+        {id: 3, titles: []},
+        {id: 4, titles: null},
+      ],
+      [{title: 'title 1'}, {title: 'title 2'}, {title: null}],
+      queryFieldNode,
+      true
+    );
+    expect(result).toEqual([
+      [
+        {id: 1, titles: ['title 1', null]},
+        {id: 2, titles: ['title 1', 'title 2']},
+      ],
+      [{id: 2, titles: ['title 1', 'title 2']}],
+      [{id: 1, titles: ['title 1', null]}],
+    ]);
+  });
 });
 
 describe('GraphQLJoin', () => {

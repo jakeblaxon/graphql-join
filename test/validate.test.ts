@@ -3,28 +3,24 @@ import {validateFieldConfig} from '../src/validate';
 
 const schema = makeExecutableSchema({
   typeDefs: `#graphql
-  type Query {
-    getReviewsByProductId(productIds: [String!]!): [Review!]!
-    getUsersByName(names: [String]): [User]
-  }
-
-  type Product {
-    upc: String!
-    name: String
-    price: Int
-    weight: Int
-  }
-
-  type Review {
-    id: ID!
-    body: String
-    productId: String!
-  }
-
-  type User {
-    name: String
-  }
-`,
+    type Query {
+      getReviewsByProductId(productIds: [String!]!): [Review!]!
+      getUsersByName(names: [String]): [User]
+    }
+    type Product {
+      upc: String!
+      name: String
+      price: Int
+    }
+    type Review {
+      id: Int!
+      body: String
+      productId: String!
+    }
+    type User {
+      name: String
+    }
+  `,
 });
 
 const typeDefs = `#graphql
@@ -229,16 +225,16 @@ describe('validateFieldConfig', () => {
   it.skip('allows ID type to map to String', () => {
     const schema = makeExecutableSchema({
       typeDefs: `#graphql
-      type Query {
-        getReviewsByProductId(productIds: [String!]!): [Review!]!
-      }
-      type Product {
-        upc: ID!
-      }
-      type Review {
-        productId: String
-      }
-    `,
+        type Query {
+          getReviewsByProductId(productIds: [String!]!): [Review!]!
+        }
+        type Product {
+          upc: ID!
+        }
+        type Review {
+          productId: String
+        }
+      `,
     });
     const typeDefs = `#graphql
       extend type Product {
@@ -253,27 +249,27 @@ describe('validateFieldConfig', () => {
         typeDefs,
         schema
       )
-    ).toReturn();
+    ).not.toThrow();
   });
 
   it('rejects selection fields that are not scalars or scalar lists', () => {
     const schema = makeExecutableSchema({
       typeDefs: `#graphql
-      type Query {
-        getReviewsByProductId(productIds: [String!]!): [Review!]!
-      }
-      type Product {
-        upc: String!
-        productIdWrapper: ProductIdWrapper
-      }
-      type Review {
-        productId: String
-        productIdWrapper: ProductIdWrapper
-      }
-      type ProductIdWrapper {
-        id: String
-      }
-    `,
+        type Query {
+          getReviewsByProductId(productIds: [String!]!): [Review!]!
+        }
+        type Product {
+          upc: String!
+          productIdWrapper: ProductIdWrapper
+        }
+        type Review {
+          productId: String
+          productIdWrapper: ProductIdWrapper
+        }
+        type ProductIdWrapper {
+          id: String
+        }
+      `,
     });
     const typeDefs = `#graphql
       extend type Product {
@@ -305,16 +301,47 @@ describe('validateFieldConfig', () => {
     );
   });
 
+  it('allows custom scalar types', () => {
+    const schema = makeExecutableSchema({
+      typeDefs: `#graphql
+        type Query {
+          getReviewsByProductId(productIds: [BigInt!]!): [Review!]!
+        }
+        type Product {
+          upc: BigInt!
+        }
+        type Review {
+          productId: BigInt
+        }
+        scalar BigInt
+      `,
+    });
+    const typeDefs = `#graphql
+      extend type Product {
+        reviews: [Review]
+      }
+    `;
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upc: productId }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).not.toThrow();
+  });
+
   it('rejects query with non-object return type (when unwrapped)', () => {
     const schema = makeExecutableSchema({
       typeDefs: `#graphql
-      type Query {
-        getScalarList: [String]!
-      }
-      type Product {
-        upc: String!
-      }
-    `,
+        type Query {
+          getScalarList: [String]!
+        }
+        type Product {
+          upc: String!
+        }
+      `,
     });
     const typeDefs = `#graphql
       extend type Product {
@@ -373,10 +400,36 @@ describe('validateFieldConfig', () => {
     );
   });
 
+  it('rejects invalid typeDefs sdl', () => {
+    const typeDefs = `#graphql
+      extend type Product {}
+    `;
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upc: productId }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: typeDefs is invalid: Syntax Error: Expected Name, found "}".'
+    );
+  });
+
   it('accepts valid configurations', () => {
     expect(() =>
       validateFieldConfig(
         'getReviewsByProductId(productIds: $upc) { upc: productId }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).not.toThrow();
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upc: productId, price: id }',
         'Product',
         'reviews',
         typeDefs,

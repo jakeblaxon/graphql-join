@@ -295,12 +295,14 @@ describe('createArgsFromKeysFunction', () => {
   it('returns args as-is when no variables are provided', () => {
     const result = createArgsFromKeysFunction(
       getQueryFieldNode(`#graphql
-        books(where: {author: {in: "Shakespeare"}})  {
+        books(where: {author: [{first: "William"}, {last: "Shakespeare"}]})  {
           title
         }
       `)
     );
-    expect(result([])).toEqual({where: {author: {in: 'Shakespeare'}}});
+    expect(result([])).toEqual({
+      where: {author: [{first: 'William'}, {last: 'Shakespeare'}]},
+    });
   });
 
   it('returns all explicit scalar values', () => {
@@ -364,38 +366,57 @@ describe('createArgsFromKeysFunction', () => {
     });
   });
 
-  it('returns args correctly', () => {
+  it('replaces each variable with a unique non-null list of its corresponding field in the parent', () => {
     const result = createArgsFromKeysFunction(
       getQueryFieldNode(`#graphql
-        books(where: {title: {in: $title} author: {in: $author}})  {
+        books(titles: $title)  {
           title
         }
       `)
     );
-    const args = [
-      {title: 'title 1', author: 'author 1'},
-      {title: 'title 2', author: 'author 2'},
-      {title: 'title 3', author: 'author 3'},
+    const parentsScalar = [
+      {title: 'title 1'},
+      {title: 'title 2'},
+      {title: 'title 2'},
+      {title: null},
     ];
-    expect(result(args)).toMatchInlineSnapshot(`
-      Object {
-        "where": Object {
-          "author": Object {
-            "in": Array [
-              "author 1",
-              "author 2",
-              "author 3",
-            ],
-          },
-          "title": Object {
-            "in": Array [
-              "title 1",
-              "title 2",
-              "title 3",
-            ],
-          },
-        },
-      }
-    `);
+    expect(result(parentsScalar)).toEqual({titles: ['title 1', 'title 2']});
+    const parentsList = [
+      {title: ['title 1', 'title 2']},
+      {title: ['title 2', null]},
+      {title: null},
+    ];
+    expect(result(parentsList)).toEqual({titles: ['title 1', 'title 2']});
+  });
+
+  it('handles variables in lists properly', () => {
+    const result = createArgsFromKeysFunction(
+      getQueryFieldNode(`#graphql
+        books(where: [$title, $author])  {
+          title
+        }
+      `)
+    );
+    const parents = [
+      {title: 'title 1', author: 'author 1'},
+      {title: 'title 2', author: null},
+    ];
+    expect(result(parents)).toEqual({
+      where: [['title 1', 'title 2'], ['author 1']],
+    });
+  });
+
+  it('handles variables in objects properly', () => {
+    const result = createArgsFromKeysFunction(
+      getQueryFieldNode(`#graphql
+        books(where: {title: $title})  {
+          title
+        }
+      `)
+    );
+    const parents = [{title: 'title 1'}];
+    expect(result(parents)).toEqual({
+      where: {title: ['title 1']},
+    });
   });
 });

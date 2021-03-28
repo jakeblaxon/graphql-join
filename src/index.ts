@@ -124,7 +124,7 @@ export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
             .value(),
         Variable: node =>
           _(parents)
-            .map(parent => _.get(parent, node.name.value))
+            .flatMap(parent => _.get(parent, node.name.value))
             .filter(_.identity)
             .uniq()
             .value(),

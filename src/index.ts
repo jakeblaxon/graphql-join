@@ -23,7 +23,7 @@ export interface GraphQLJoinConfig {
   };
 }
 
-export default class GraphQLJoin implements Transform {
+export class GraphQLJoin implements Transform {
   constructor(private config: GraphQLJoinConfig) {}
   public transformSchema(originalSchema: GraphQLSchema) {
     return stitchSchemas({

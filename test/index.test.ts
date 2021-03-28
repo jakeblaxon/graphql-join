@@ -338,6 +338,39 @@ describe('mapChildrenToParents', () => {
     ]);
   });
 
+  it('matches by containment if parent key type is a list', () => {
+    const queryFieldNode = getQueryFieldNode(`#graphql
+      books { titles: title }
+    `);
+    const result = mapChildrenToParents(
+      [
+        {id: 1, title: 'title 1'},
+        {id: 2, title: 'title 2'},
+        {id: 3, title: null},
+      ],
+      [
+        {titles: ['title 1', null]},
+        {titles: ['title 1', 'title 2']},
+        {titles: []},
+        {titles: null},
+      ],
+      queryFieldNode,
+      true
+    );
+    expect(result).toEqual([
+      [
+        {id: 1, title: 'title 1'},
+        {id: 3, title: null},
+      ],
+      [
+        {id: 1, title: 'title 1'},
+        {id: 2, title: 'title 2'},
+      ],
+      [],
+      [],
+    ]);
+  });
+
   it('matches by intersection if both child and parent key types are lists', () => {
     const queryFieldNode = getQueryFieldNode(`#graphql
       books { titles }

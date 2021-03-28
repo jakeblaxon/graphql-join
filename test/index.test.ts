@@ -1,8 +1,9 @@
-import {execute, Kind, parse} from 'graphql';
+import {execute, Kind, parse, print} from 'graphql';
 import {makeExecutableSchema} from '@graphql-tools/schema';
 import {wrapSchema} from '@graphql-tools/wrap';
 import {
   createArgsFromKeysFunction,
+  createChildSelectionSet,
   createParentSelectionSet,
   GraphQLJoin,
 } from '../src';
@@ -221,7 +222,7 @@ function getQueryFieldNode(joinQuery: string) {
 }
 
 describe('createParentSelectionSet', () => {
-  it('should select all selection fields', () => {
+  it('selects all selection fields', () => {
     const result = createParentSelectionSet(
       getQueryFieldNode(`#graphql
         books {
@@ -233,7 +234,7 @@ describe('createParentSelectionSet', () => {
     expect(result).toEqual('{ title author }');
   });
 
-  it('should select selection field aliases', () => {
+  it('selects selection field aliases', () => {
     const result = createParentSelectionSet(
       getQueryFieldNode(`#graphql
         books {
@@ -244,7 +245,7 @@ describe('createParentSelectionSet', () => {
     expect(result).toEqual('{ bookTitle }');
   });
 
-  it('should select all variables', () => {
+  it('selects all variables', () => {
     const result = createParentSelectionSet(
       getQueryFieldNode(`#graphql
         books(where: {title: {in: $title} author: {in: $author}})  {
@@ -253,6 +254,31 @@ describe('createParentSelectionSet', () => {
       `)
     );
     expect(result).toEqual('{ title author }');
+  });
+});
+
+describe('createChildSelectionSet', () => {
+  it('selects all selection fields', () => {
+    const result = createChildSelectionSet(
+      getQueryFieldNode(`#graphql
+        books {
+          title
+          author
+        }
+      `)
+    );
+    expect(result.map(node => print(node)).join(' ')).toEqual('title author');
+  });
+
+  it('ignores selection field aliases', () => {
+    const result = createChildSelectionSet(
+      getQueryFieldNode(`#graphql
+        books {
+          bookTitle: title
+        }
+      `)
+    );
+    expect(result.map(node => print(node)).join(' ')).toEqual('title');
   });
 });
 
@@ -282,5 +308,3 @@ describe('createParentSelectionSet', () => {
 //     });
 //   });
 // });
-
-describe('addRequiredChildFieldsToRequest', () => {});

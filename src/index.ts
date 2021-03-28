@@ -4,6 +4,7 @@ import {
   GraphQLSchema,
   isListType,
   isNonNullType,
+  SelectionNode,
   visit,
 } from 'graphql';
 import {batchDelegateToSchema} from '@graphql-tools/batch-delegate';
@@ -52,7 +53,16 @@ export function createFieldResolver(
   schema: GraphQLSchema
 ) {
   const argsFromKeys = createArgsFromKeysFunction(queryFieldNode);
-  const childSelectionSetTransform = createChildSelectionSet(queryFieldNode);
+  const childSelectionSetTransform = new WrapQuery(
+    [queryFieldNode.name.value],
+    selectionSet => ({
+      ...selectionSet,
+      selections: selectionSet.selections.concat(
+        createChildSelectionSet(queryFieldNode)
+      ),
+    }),
+    result => result
+  );
   return {
     selectionSet: createParentSelectionSet(queryFieldNode),
     resolve: (parent, args, context, info) =>
@@ -84,18 +94,12 @@ export function createParentSelectionSet(queryFieldNode: FieldNode) {
   return `{ ${Array.from(fields).join(' ')} }`;
 }
 
-export function createChildSelectionSet(queryFieldNode: FieldNode) {
-  const strippedAliasSelections = visit(queryFieldNode, {
+export function createChildSelectionSet(
+  queryFieldNode: FieldNode
+): readonly SelectionNode[] {
+  return visit(queryFieldNode, {
     Field: node => ({...node, alias: undefined}),
   }).selectionSet.selections;
-  return new WrapQuery(
-    [queryFieldNode.name.value],
-    selectionSet => ({
-      ...selectionSet,
-      selections: selectionSet.selections.concat(strippedAliasSelections),
-    }),
-    result => result
-  );
 }
 
 export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
@@ -128,8 +132,8 @@ export function mapChildrenToParents(
   queryFieldNode: FieldNode,
   returnType: GraphQLOutputType
 ) {
-  const childKeyFields: Array<string> = [];
-  const parentKeyFields: Array<string> = [];
+  const childKeyFields: string[] = [];
+  const parentKeyFields: string[] = [];
   visit(queryFieldNode, {
     Field: (node, key, parent) => {
       parent && childKeyFields.push(node.name.value);
@@ -139,7 +143,7 @@ export function mapChildrenToParents(
   const toManyRelation =
     isListType(returnType) ||
     (isNonNullType(returnType) && isListType(returnType.ofType));
-  const hashFn = (entity: Record<string, Entity>, keyFields: Array<string>) =>
+  const hashFn = (entity: Record<string, Entity>, keyFields: string[]) =>
     childKeyFields.length === 1
       ? entity[keyFields[0]]
       : JSON.stringify(_.at(entity, keyFields));

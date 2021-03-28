@@ -333,4 +333,16 @@ describe('validateFieldConfig', () => {
       'graphql-join config error for resolver [Product.reviews]: Query does not return the intended entity type Review for [Product.reviews]. Returns [User].'
     );
   });
+
+  it('accepts valid configurations', () => {
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upc: productId }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).not.toThrow();
+  });
 });

@@ -140,7 +140,7 @@ function validateReturnType(
   const returnType = schema.getQueryType()?.getFields()[
     queryFieldNode.name.value
   ]?.type;
-  if (!returnType) throw new Error('Could not find return type for query.');
+  if (!returnType) throw Error('Could not find return type for query.');
   const unwrappedReturnType = unwrapType(returnType);
   if (!isObjectType(unwrappedReturnType))
     throw Error(
@@ -191,14 +191,15 @@ function validateSelections(
             : 'Use an alias to map the child field to the corresponding parent field.'
         }`
       );
-    const childFieldType = childType.getFields()[selection.name.value]?.type;
+    const childFieldName = selection.name.value;
+    const childFieldType = childType.getFields()[childFieldName]?.type;
     if (!childFieldType)
       throw Error(
-        `Could not find type definition for [${childType.name}.${selection.name.value}].`
+        `Could not find type definition for [${childType.name}.${childFieldName}].`
       );
     if (!isScalarType(unwrapType(childFieldType)))
       throw Error(
-        `Cannot join on key [${childType.name}.${selection.name.value}]. Join keys must be scalars or scalar lists.`
+        `Cannot join on key [${childType.name}.${childFieldName}]. Join keys must be scalars or scalar lists.`
       );
     if (
       unwrapType(childFieldType).name !==
@@ -207,7 +208,7 @@ function validateSelections(
       throw Error(
         `Cannot join on keys [${typeNode.name.value}.${parentFieldName}] and [${
           childType.name
-        }.${selection.name.value}]. They are different types: ${
+        }.${childFieldName}]. They are different types: ${
           unwrapTypeNode(parentFieldNode.type).name.value
         } and ${unwrapType(childFieldType).name}.`
       );

@@ -282,29 +282,120 @@ describe('createChildSelectionSet', () => {
   });
 });
 
-// describe('createArgsFromKeysFunction', () => {
-//   it('should return args correctly', () => {
-//     const result = createArgsFromKeysFunction(joinQueryNode);
-//     const args = [
-//       {bookTitle: 'bookTitle 1', bookAuthor: 'bookAuthor 1'},
-//       {bookTitle: 'bookTitle 2', bookAuthor: 'bookAuthor 2'},
-//       {bookTitle: 'bookTitle 3', bookAuthor: 'bookAuthor 3'},
-//     ];
-//     expect(result(args)).toEqual({
-//       filter: {
-//         and: [
-//           {
-//             title: {
-//               in: ['bookTitle 1', 'bookTitle 2', 'bookTitle 3'],
-//             },
-//           },
-//           {
-//             author: {
-//               in: ['bookAuthor 1', 'bookAuthor 2', 'bookAuthor 3'],
-//             },
-//           },
-//         ],
-//       },
-//     });
-//   });
-// });
+describe('createArgsFromKeysFunction', () => {
+  it('returns empty object when no args are provided', () => {
+    const result = createArgsFromKeysFunction(
+      getQueryFieldNode(`#graphql
+        books { title }
+      `)
+    );
+    expect(result([])).toEqual({});
+  });
+
+  it('returns args as-is when no variables are provided', () => {
+    const result = createArgsFromKeysFunction(
+      getQueryFieldNode(`#graphql
+        books(where: {author: {in: "Shakespeare"}})  {
+          title
+        }
+      `)
+    );
+    expect(result([])).toEqual({where: {author: {in: 'Shakespeare'}}});
+  });
+
+  it('returns all explicit scalar values', () => {
+    const result = createArgsFromKeysFunction(
+      getQueryFieldNode(`#graphql
+        books(
+          int: 1
+          float: 1.5
+          string: "string"
+          booleanTrue: true
+          booleanFalse: false
+          null: null
+          enum: EnumValue
+          lists: {
+            ints: [1, 2]
+            floats: [1, 1.5]
+            strings: ["string1", "string2"]
+            booleans: [true, false]
+            nulls: [null, null]
+            enums: [EnumValue1, EnumValue2]
+          }
+          wrapped: [
+            {int: 1}
+            {float: 1.5}
+            {string: "string"}
+            {booleanTrue: true}
+            {booleanFalse: false}
+            {null: null}
+            {enum: EnumValue}
+          ]
+        ) {
+          title
+        }
+      `)
+    );
+    expect(result([])).toEqual({
+      int: 1,
+      float: 1.5,
+      string: 'string',
+      booleanTrue: true,
+      booleanFalse: false,
+      null: null,
+      enum: 'EnumValue',
+      lists: {
+        ints: [1, 2],
+        floats: [1, 1.5],
+        strings: ['string1', 'string2'],
+        booleans: [true, false],
+        nulls: [null, null],
+        enums: ['EnumValue1', 'EnumValue2'],
+      },
+      wrapped: [
+        {int: 1},
+        {float: 1.5},
+        {string: 'string'},
+        {booleanTrue: true},
+        {booleanFalse: false},
+        {null: null},
+        {enum: 'EnumValue'},
+      ],
+    });
+  });
+
+  it('returns args correctly', () => {
+    const result = createArgsFromKeysFunction(
+      getQueryFieldNode(`#graphql
+        books(where: {title: {in: $title} author: {in: $author}})  {
+          title
+        }
+      `)
+    );
+    const args = [
+      {title: 'title 1', author: 'author 1'},
+      {title: 'title 2', author: 'author 2'},
+      {title: 'title 3', author: 'author 3'},
+    ];
+    expect(result(args)).toMatchInlineSnapshot(`
+      Object {
+        "where": Object {
+          "author": Object {
+            "in": Array [
+              "author 1",
+              "author 2",
+              "author 3",
+            ],
+          },
+          "title": Object {
+            "in": Array [
+              "title 1",
+              "title 2",
+              "title 3",
+            ],
+          },
+        },
+      }
+    `);
+  });
+});

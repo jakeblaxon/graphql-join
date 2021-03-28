@@ -103,21 +103,30 @@ export function createChildSelectionSet(
 }
 
 export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
+  const scalarSymbol = Symbol('Scalar');
+  const getValue = (node: {value: {kind: unknown; value?: unknown}}) =>
+    node.value.kind === scalarSymbol ? node.value.value : node.value;
   return (parents: readonly unknown[]) => {
     const args = visit(queryFieldNode, {
       leave: {
-        Argument: node => ({[node.name.value]: node.value}),
+        IntValue: node => ({kind: scalarSymbol, value: parseInt(node.value)}),
+        FloatValue: node => ({kind: scalarSymbol, value: Number(node.value)}),
+        StringValue: node => ({kind: scalarSymbol, value: node.value}),
+        EnumValue: node => ({kind: scalarSymbol, value: node.value}),
+        BooleanValue: node => ({kind: scalarSymbol, value: node.value}),
+        NullValue: () => ({kind: scalarSymbol, value: null}),
+        Argument: node => ({[node.name.value]: getValue(node)}),
+        ListValue: node => node.values.map(value => getValue({value})),
         ObjectValue: node =>
-          node.fields.reduce((obj, field) => {
-            obj[field.name.value] = field.value;
-            return obj;
-          }, {} as Record<string, unknown>),
-        ListValue: node => node.values,
+          _(node.fields)
+            .keyBy(field => field.name.value)
+            .mapValues(getValue)
+            .value(),
         Variable: node =>
           _(parents)
             .map(parent => _.get(parent, node.name.value))
+            .filter(_.identity)
             .uniq()
-            .filter(val => val)
             .value(),
       },
     }).arguments;

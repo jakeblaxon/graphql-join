@@ -80,7 +80,21 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Only one query field is allowed.'
+      'graphql-join config error for resolver [Product.reviews]: Multiple queries or fragments are not allowed.'
+    );
+  });
+
+  it('rejects mltiple queries', () => {
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upc: productId } getUsersByName(names: $upc) { upc: name }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Multiple queries or fragments are not allowed.'
     );
   });
 
@@ -331,6 +345,31 @@ describe('validateFieldConfig', () => {
       )
     ).toThrow(
       'graphql-join config error for resolver [Product.reviews]: Query does not return the intended entity type Review for [Product.reviews]. Returns [User].'
+    );
+  });
+
+  it('rejects queries with fragments', () => {
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { ...ReviewFragment } fragment ReviewFragment on Review { upc: productId }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Multiple queries or fragments are not allowed.'
+    );
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { ...on Review { upc: productId } }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Fragments are not allowed in query.'
     );
   });
 

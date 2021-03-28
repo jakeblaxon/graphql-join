@@ -46,7 +46,7 @@ export function validateFieldConfig(
   if (operationDefinition?.kind !== Kind.OPERATION_DEFINITION)
     throw new ValidationError('Unable to find operation definition for query.');
   if (operationDefinition.selectionSet.selections.length > 1)
-    throw new ValidationError('Only one query field is allowed.');
+    throw new ValidationError('Multiple queries or fragments are not allowed.');
   const queryFieldNode = operationDefinition.selectionSet.selections[0];
   if (queryFieldNode?.kind !== Kind.FIELD)
     throw new ValidationError('Query type must be a field node.');
@@ -176,7 +176,8 @@ function validateSelections(
   childType: GraphQLObjectType
 ) {
   queryFieldNode.selectionSet?.selections.forEach(selection => {
-    if (selection.kind !== Kind.FIELD) throw Error();
+    if (selection.kind !== Kind.FIELD)
+      throw Error('Fragments are not allowed in query.');
     const parentFieldName = selection.alias?.value || selection.name.value;
     const parentFieldNode = typeNode.fields?.find(
       field => field.name.value === parentFieldName

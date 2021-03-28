@@ -337,6 +337,49 @@ describe('mapChildrenToParents', () => {
       [{id: 1, titles: ['title 1', null]}],
     ]);
   });
+
+  it('matches by intersection if both child and parent key types are lists', () => {
+    const queryFieldNode = getQueryFieldNode(`#graphql
+      books { titles }
+    `);
+    const result = mapChildrenToParents(
+      [
+        {id: 1, titles: ['title 1', null]},
+        {id: 2, titles: ['title 1', 'title 2']},
+        {id: 3, titles: ['title 3']},
+        {id: 4, titles: null},
+      ],
+      [
+        {titles: ['title 1']},
+        {titles: ['title 1', 'title 2', 'title 3']},
+        {titles: ['title 2', 'title 3']},
+        {titles: ['title 3', null]},
+        {titles: null},
+      ],
+      queryFieldNode,
+      true
+    );
+    expect(result).toEqual([
+      [
+        {id: 1, titles: ['title 1', null]},
+        {id: 2, titles: ['title 1', 'title 2']},
+      ],
+      [
+        {id: 1, titles: ['title 1', null]},
+        {id: 2, titles: ['title 1', 'title 2']},
+        {id: 3, titles: ['title 3']},
+      ],
+      [
+        {id: 2, titles: ['title 1', 'title 2']},
+        {id: 3, titles: ['title 3']},
+      ],
+      [
+        {id: 3, titles: ['title 3']},
+        {id: 1, titles: ['title 1', null]},
+      ],
+      [],
+    ]);
+  });
 });
 
 describe('GraphQLJoin', () => {

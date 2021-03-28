@@ -178,7 +178,22 @@ export function mapChildrenToParents(
     .groupBy(childKeyPair => childKeyPair.key)
     .mapValues(group => group.map(elt => elt.value))
     .value();
-  return parents
-    .map(parent => childrenByKey[hashFn(parent, parentKeyFields)])
+
+  const parentKeyPairs = parents.map(parent => ({
+    parent,
+    keyOrKeyList: hashFn(parent, parentKeyFields),
+  }));
+  const parentKeyIsList = _.some(parentKeyPairs, pair =>
+    _.isArray(pair.keyOrKeyList)
+  );
+  return parentKeyPairs
+    .map(pair =>
+      parentKeyIsList
+        ? _(pair.keyOrKeyList || [])
+            .flatMap((key: any) => childrenByKey[key])
+            .uniq()
+            .value()
+        : childrenByKey[pair.keyOrKeyList]
+    )
     .map(group => (toManyRelation ? group ?? [] : group?.[0] ?? null));
 }

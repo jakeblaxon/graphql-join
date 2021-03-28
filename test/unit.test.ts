@@ -1,10 +1,5 @@
 import {Kind, parse} from 'graphql';
-import {
-  createArgsFromKeysFunction,
-  createKeyMapping,
-  createSelectionSet,
-  getQueryName,
-} from '../src';
+import {createArgsFromKeysFunction, createParentSelectionSet} from '../src';
 
 function getQueryFieldNode(joinQuery: string) {
   const def = parse(`{${joinQuery}}`).definitions[0];
@@ -30,24 +25,10 @@ const joinQuery = `#graphql
 `;
 const joinQueryNode = getQueryFieldNode(joinQuery);
 
-describe('createKeyMapping', () => {
-  it('should create key map', () => {
-    const result = createKeyMapping(joinQueryNode);
-    expect(result).toEqual({title: 'bookTitle'});
-  });
-});
-
 describe('createSelectionSet', () => {
   it('should select all variables', () => {
-    const result = createSelectionSet(joinQueryNode);
+    const result = createParentSelectionSet(joinQueryNode);
     expect(result).toEqual('{ bookTitle bookAuthor }');
-  });
-});
-
-describe('getQueryName', () => {
-  it('should return the name of the query', () => {
-    const result = getQueryName(joinQueryNode);
-    expect(result).toEqual('books');
   });
 });
 

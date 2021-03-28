@@ -3,6 +3,7 @@ import {makeExecutableSchema} from '@graphql-tools/schema';
 const typeDefs = `#graphql
   type Query {
     getReviewsById(ids: [ID!]!): [Review!]!
+    getReviewsByProductId(productIds: [String!]!): [Review!]!
   }
 
   type Review {
@@ -16,6 +17,11 @@ const resolvers = {
   Query: {
     getReviewsById(parent: unknown, args: {ids: string[]}) {
       return reviews.filter(review => args.ids.includes(review.id));
+    },
+    getReviewsByProductId(parent: unknown, args: {productIds: string[]}) {
+      return reviews.filter(review =>
+        args.productIds.includes(review.productId)
+      );
     },
   },
 };
@@ -39,7 +45,7 @@ const reviews = [
   {
     id: '4',
     body: 'Prefer something else.',
-    productId: '4',
+    productId: '1',
   },
 ];
 

@@ -5,7 +5,7 @@ import {
   createArgsFromKeysFunction,
   createChildSelectionSet,
   createParentSelectionSet,
-  GraphQLJoin,
+  GraphQLJoinTransform,
   mapChildrenToParents,
 } from '../src';
 
@@ -424,7 +424,7 @@ describe('mapChildrenToParents', () => {
   });
 });
 
-describe('GraphQLJoin', () => {
+describe('GraphQLJoinTransform', () => {
   const typeDefs = `#graphql
     type Query {
       getProductsById(ids: [String!]!): [Product!]!
@@ -518,7 +518,7 @@ describe('GraphQLJoin', () => {
     resolvers,
   });
 
-  const graphqlJoinTransform = new GraphQLJoin({
+  const graphqlJoinTransform = new GraphQLJoinTransform({
     typeDefs: typeExtensions,
     resolvers: {
       Review: {
@@ -677,7 +677,7 @@ describe('GraphQLJoin', () => {
         },
       }),
       transforms: [
-        new GraphQLJoin({
+        new GraphQLJoinTransform({
           typeDefs: `#graphql
             extend type Author {
               books: [Book!]!

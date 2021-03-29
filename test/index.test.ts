@@ -232,6 +232,19 @@ describe('mapChildrenToParents', () => {
     ).toEqual([[]]);
   });
 
+  it('does not match on keys that are null', () => {
+    const queryFieldNode = getQueryFieldNode(`#graphql
+      books { title }
+    `);
+    const result = mapChildrenToParents(
+      [{id: 1, title: null}],
+      [{title: null}],
+      queryFieldNode,
+      false
+    );
+    expect(result).toEqual([null]);
+  });
+
   it('matches to single child when toManyRelation is false', () => {
     const queryFieldNode = getQueryFieldNode(`#graphql
       books { title }
@@ -334,7 +347,7 @@ describe('mapChildrenToParents', () => {
         {id: 2, titles: ['title 1', 'title 2']},
       ],
       [{id: 2, titles: ['title 1', 'title 2']}],
-      [{id: 1, titles: ['title 1', null]}],
+      [],
     ]);
   });
 
@@ -358,10 +371,7 @@ describe('mapChildrenToParents', () => {
       true
     );
     expect(result).toEqual([
-      [
-        {id: 1, title: 'title 1'},
-        {id: 3, title: null},
-      ],
+      [{id: 1, title: 'title 1'}],
       [
         {id: 1, title: 'title 1'},
         {id: 2, title: 'title 2'},
@@ -406,10 +416,7 @@ describe('mapChildrenToParents', () => {
         {id: 2, titles: ['title 1', 'title 2']},
         {id: 3, titles: ['title 3']},
       ],
-      [
-        {id: 3, titles: ['title 3']},
-        {id: 1, titles: ['title 1', null]},
-      ],
+      [{id: 3, titles: ['title 3']}],
       [],
     ]);
   });

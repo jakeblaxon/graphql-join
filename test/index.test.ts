@@ -558,6 +558,56 @@ describe('GraphQLJoin', () => {
     });
   });
 
+  it('does not require key fields in user query selection set', async () => {
+    const wrappedSchema = wrapSchema({
+      schema,
+      transforms: [graphqlJoinTransform],
+    });
+    const result = await execute(
+      wrappedSchema,
+      parse(`#graphql
+        {
+          getReviewsById(ids: ["1", "2", "3", "4"]) {
+            body
+            product {
+              name
+            }
+          }
+        }
+      `)
+    );
+    expect(result).toEqual({
+      data: {
+        getReviewsById: [
+          {
+            body: 'Love it!',
+            product: {
+              name: 'Table',
+            },
+          },
+          {
+            body: 'Too expensive.',
+            product: {
+              name: 'Couch',
+            },
+          },
+          {
+            body: 'Could be better.',
+            product: {
+              name: 'Chair',
+            },
+          },
+          {
+            body: 'Prefer something else.',
+            product: {
+              name: 'Table',
+            },
+          },
+        ],
+      },
+    });
+  });
+
   it('supports nested relations', async () => {
     const wrappedSchema = wrapSchema({
       schema,

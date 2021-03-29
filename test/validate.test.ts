@@ -240,11 +240,6 @@ describe('validateFieldConfig', () => {
         }
       `,
     });
-    const typeDefs = `#graphql
-      extend type Product {
-        reviews: [Review]
-      }
-    `;
     expect(() =>
       validateFieldConfig(
         'getReviewsByProductId(productIds: $upc) { upc: productIdWrapper { id } }',
@@ -270,6 +265,66 @@ describe('validateFieldConfig', () => {
     );
   });
 
+  it('only allows a single selection field when its corresponding parent or child field is a list', () => {
+    const schema = makeExecutableSchema({
+      typeDefs: `#graphql
+        type Query {
+          getReviewsByProductId(productIds: [String!]!): [Review!]!
+        }
+        type Product {
+          upc: String!
+          name: String
+          reviewIds: [String]
+        }
+        type Review {
+          id: String!
+          name: String
+          productIds: [String]
+        }
+      `,
+    });
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upc: productIds }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).not.toThrow();
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upc: productIds, name }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Only one selection field is allowed when joining on a list type like Review.productIds.'
+    );
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { reviewIds: id }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).not.toThrow();
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { reviewIds: id, name }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Only one selection field is allowed when joining on a list type like Product.reviewIds.'
+    );
+  });
+
   it('allows custom scalar types', () => {
     const schema = makeExecutableSchema({
       typeDefs: `#graphql
@@ -285,11 +340,6 @@ describe('validateFieldConfig', () => {
         scalar BigInt
       `,
     });
-    const typeDefs = `#graphql
-      extend type Product {
-        reviews: [Review]
-      }
-    `;
     expect(() =>
       validateFieldConfig(
         'getReviewsByProductId(productIds: $upc) { upc: productId }',
@@ -316,11 +366,6 @@ describe('validateFieldConfig', () => {
         }
       `,
     });
-    const typeDefs = `#graphql
-      extend type Product {
-        reviews: [Review]
-      }
-    `;
     expect(() =>
       validateFieldConfig(
         'getReview { upc: productId }',

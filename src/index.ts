@@ -155,6 +155,30 @@ export function mapChildrenToParents(
       parent && parentKeyFields.push(node.alias?.value || node.name.value);
     },
   });
+
+  if (childKeyFields.length === 1) {
+    const childrenByKey = _(children)
+      .flatMap(child =>
+        _([child[childKeyFields[0]]])
+          .flatten()
+          .map(key => ({key, child}))
+          .value()
+      )
+      .groupBy(pair => pair.key)
+      .mapValues(pairs => pairs.map(pair => pair.child))
+      .value();
+
+    return parents
+      .map(parent =>
+        _([parent[parentKeyFields[0]]])
+          .flatten()
+          .flatMap(key => (key === null ? [] : childrenByKey[key] || []))
+          .uniq()
+          .value()
+      )
+      .map(group => (toManyRelation ? group || [] : group?.[0] || null));
+  }
+
   const hashFn = (entity: Record<string, Entity>, keyFields: string[]) =>
     childKeyFields.length === 1
       ? entity[keyFields[0]]

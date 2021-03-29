@@ -1,9 +1,9 @@
 import {
   FieldNode,
-  GraphQLOutputType,
   GraphQLSchema,
   isListType,
   isNonNullType,
+  SelectionNode,
   visit,
 } from 'graphql';
 import {batchDelegateToSchema} from '@graphql-tools/batch-delegate';
@@ -23,7 +23,7 @@ export interface GraphQLJoinConfig {
   };
 }
 
-export default class GraphQLJoin implements Transform {
+export class GraphQLJoin implements Transform {
   constructor(private config: GraphQLJoinConfig) {}
   public transformSchema(originalSchema: GraphQLSchema) {
     return stitchSchemas({
@@ -52,7 +52,16 @@ export function createFieldResolver(
   schema: GraphQLSchema
 ) {
   const argsFromKeys = createArgsFromKeysFunction(queryFieldNode);
-  const childSelectionSetTransform = createChildSelectionSet(queryFieldNode);
+  const childSelectionSetTransform = new WrapQuery(
+    [queryFieldNode.name.value],
+    selectionSet => ({
+      ...selectionSet,
+      selections: selectionSet.selections.concat(
+        createChildSelectionSet(queryFieldNode)
+      ),
+    }),
+    result => result
+  );
   return {
     selectionSet: createParentSelectionSet(queryFieldNode),
     resolve: (parent, args, context, info) =>
@@ -66,7 +75,14 @@ export function createFieldResolver(
         transforms: [childSelectionSetTransform],
         argsFromKeys,
         valuesFromResults: (results, keys) =>
-          mapChildrenToParents(results, keys, queryFieldNode, info.returnType),
+          mapChildrenToParents(
+            results,
+            keys,
+            queryFieldNode,
+            isListType(info.returnType) ||
+              (isNonNullType(info.returnType) &&
+                isListType(info.returnType.ofType))
+          ),
       }),
   } as IResolvers;
 }
@@ -84,36 +100,39 @@ export function createParentSelectionSet(queryFieldNode: FieldNode) {
   return `{ ${Array.from(fields).join(' ')} }`;
 }
 
-export function createChildSelectionSet(queryFieldNode: FieldNode) {
-  const strippedAliasSelections = visit(queryFieldNode, {
+export function createChildSelectionSet(
+  queryFieldNode: FieldNode
+): readonly SelectionNode[] {
+  return visit(queryFieldNode, {
     Field: node => ({...node, alias: undefined}),
   }).selectionSet.selections;
-  return new WrapQuery(
-    [queryFieldNode.name.value],
-    selectionSet => ({
-      ...selectionSet,
-      selections: selectionSet.selections.concat(strippedAliasSelections),
-    }),
-    result => result
-  );
 }
 
 export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
+  const scalarSymbol = Symbol('Scalar');
+  const getValue = (node: {value: {kind: unknown; value?: unknown}}) =>
+    node.value.kind === scalarSymbol ? node.value.value : node.value;
   return (parents: readonly unknown[]) => {
     const args = visit(queryFieldNode, {
       leave: {
-        Argument: node => ({[node.name.value]: node.value}),
+        IntValue: node => ({kind: scalarSymbol, value: parseInt(node.value)}),
+        FloatValue: node => ({kind: scalarSymbol, value: Number(node.value)}),
+        StringValue: node => ({kind: scalarSymbol, value: node.value}),
+        EnumValue: node => ({kind: scalarSymbol, value: node.value}),
+        BooleanValue: node => ({kind: scalarSymbol, value: node.value}),
+        NullValue: () => ({kind: scalarSymbol, value: null}),
+        Argument: node => ({[node.name.value]: getValue(node)}),
+        ListValue: node => node.values.map(value => getValue({value})),
         ObjectValue: node =>
-          node.fields.reduce((obj, field) => {
-            obj[field.name.value] = field.value;
-            return obj;
-          }, {} as Record<string, unknown>),
-        ListValue: node => node.values,
+          _(node.fields)
+            .keyBy(field => field.name.value)
+            .mapValues(getValue)
+            .value(),
         Variable: node =>
           _(parents)
-            .map(parent => _.get(parent, node.name.value))
+            .flatMap(parent => _.get(parent, node.name.value))
+            .filter(_.identity)
             .uniq()
-            .filter(val => val)
             .value(),
       },
     }).arguments;
@@ -126,20 +145,17 @@ export function mapChildrenToParents(
   children: readonly Entity[],
   parents: readonly Entity[],
   queryFieldNode: FieldNode,
-  returnType: GraphQLOutputType
+  toManyRelation: boolean
 ) {
-  const childKeyFields: Array<string> = [];
-  const parentKeyFields: Array<string> = [];
+  const childKeyFields: string[] = [];
+  const parentKeyFields: string[] = [];
   visit(queryFieldNode, {
     Field: (node, key, parent) => {
       parent && childKeyFields.push(node.name.value);
       parent && parentKeyFields.push(node.alias?.value || node.name.value);
     },
   });
-  const toManyRelation =
-    isListType(returnType) ||
-    (isNonNullType(returnType) && isListType(returnType.ofType));
-  const hashFn = (entity: Record<string, Entity>, keyFields: Array<string>) =>
+  const hashFn = (entity: Record<string, Entity>, keyFields: string[]) =>
     childKeyFields.length === 1
       ? entity[keyFields[0]]
       : JSON.stringify(_.at(entity, keyFields));

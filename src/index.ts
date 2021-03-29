@@ -131,7 +131,7 @@ export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
         Variable: node =>
           _(parents)
             .flatMap(parent => _.get(parent, node.name.value))
-            .filter(_.identity)
+            .filter(elt => elt !== null && elt !== undefined)
             .uniq()
             .value(),
       },
@@ -140,10 +140,9 @@ export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
   };
 }
 
-type Entity = any;
 export function mapChildrenToParents(
-  children: readonly Entity[],
-  parents: readonly Entity[],
+  children: readonly Record<string, unknown>[],
+  parents: readonly Record<string, unknown>[],
   queryFieldNode: FieldNode,
   toManyRelation: boolean
 ) {
@@ -155,14 +154,32 @@ export function mapChildrenToParents(
       parent && parentKeyFields.push(node.alias?.value || node.name.value);
     },
   });
-  const hashFn = (entity: Record<string, Entity>, keyFields: string[]) =>
-    childKeyFields.length === 1
-      ? entity[keyFields[0]]
-      : JSON.stringify(_.at(entity, keyFields));
-  const childrenByKey = _.groupBy(children, child =>
-    hashFn(child, childKeyFields)
-  );
-  return parents
-    .map(parent => childrenByKey[hashFn(parent, parentKeyFields)])
-    .map(group => (toManyRelation ? group ?? [] : group?.[0] ?? null));
+  if (childKeyFields.length === 1) {
+    const childrenByKey = _(children)
+      .flatMap(child =>
+        _([child[childKeyFields[0]]])
+          .flatten()
+          .map(key => ({key, child}))
+          .value()
+      )
+      .groupBy(pair => pair.key)
+      .mapValues(pairs => pairs.map(pair => pair.child))
+      .value();
+    return parents
+      .map(parent =>
+        _([parent[parentKeyFields[0]]])
+          .flatten()
+          .flatMap(key => (key === null ? [] : childrenByKey[key as any] || []))
+          .uniq()
+          .value()
+      )
+      .map(group => (toManyRelation ? group : group[0] || null));
+  } else {
+    const childrenByKey = _.groupBy(children, child =>
+      JSON.stringify(_.at(child, childKeyFields))
+    );
+    return parents
+      .map(prnt => childrenByKey[JSON.stringify(_.at(prnt, parentKeyFields))])
+      .map(group => (toManyRelation ? group || [] : group?.[0] ?? null));
+  }
 }

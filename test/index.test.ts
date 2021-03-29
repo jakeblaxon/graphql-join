@@ -176,15 +176,17 @@ describe('createArgsFromKeysFunction', () => {
       {title: 'title 1'},
       {title: 'title 2'},
       {title: 'title 2'},
+      {title: ''},
       {title: null},
+      {title: undefined},
     ];
-    expect(result(parentsScalar)).toEqual({titles: ['title 1', 'title 2']});
+    expect(result(parentsScalar)).toEqual({titles: ['title 1', 'title 2', '']});
     const parentsList = [
       {title: ['title 1', 'title 2']},
-      {title: ['title 2', null]},
-      {title: null},
+      {title: ['title 2', '', null]},
+      {title: undefined},
     ];
-    expect(result(parentsList)).toEqual({titles: ['title 1', 'title 2']});
+    expect(result(parentsList)).toEqual({titles: ['title 1', 'title 2', '']});
   });
 
   it('handles variables in lists properly', () => {
@@ -230,6 +232,19 @@ describe('mapChildrenToParents', () => {
     expect(
       mapChildrenToParents([], [{title: 'title 1'}], queryFieldNode, true)
     ).toEqual([[]]);
+  });
+
+  it('does not match on keys that are null', () => {
+    const queryFieldNode = getQueryFieldNode(`#graphql
+      books { title }
+    `);
+    const result = mapChildrenToParents(
+      [{id: 1, title: null}],
+      [{title: null}],
+      queryFieldNode,
+      false
+    );
+    expect(result).toEqual([null]);
   });
 
   it('matches to single child when toManyRelation is false', () => {
@@ -310,6 +325,101 @@ describe('mapChildrenToParents', () => {
     expect(result).toEqual([
       [{id: 1, title: 'title 1', author: 'author 1'}],
       [{id: 3, title: 'title 2', author: 'author 2'}],
+    ]);
+  });
+
+  it('matches by containment if child key type is a list', () => {
+    const queryFieldNode = getQueryFieldNode(`#graphql
+      books { title: titles }
+    `);
+    const result = mapChildrenToParents(
+      [
+        {id: 1, titles: ['title 1', null]},
+        {id: 2, titles: ['title 1', 'title 2']},
+        {id: 3, titles: []},
+        {id: 4, titles: null},
+      ],
+      [{title: 'title 1'}, {title: 'title 2'}, {title: null}],
+      queryFieldNode,
+      true
+    );
+    expect(result).toEqual([
+      [
+        {id: 1, titles: ['title 1', null]},
+        {id: 2, titles: ['title 1', 'title 2']},
+      ],
+      [{id: 2, titles: ['title 1', 'title 2']}],
+      [],
+    ]);
+  });
+
+  it('matches by containment if parent key type is a list', () => {
+    const queryFieldNode = getQueryFieldNode(`#graphql
+      books { titles: title }
+    `);
+    const result = mapChildrenToParents(
+      [
+        {id: 1, title: 'title 1'},
+        {id: 2, title: 'title 2'},
+        {id: 3, title: null},
+      ],
+      [
+        {titles: ['title 1', null]},
+        {titles: ['title 1', 'title 2']},
+        {titles: []},
+        {titles: null},
+      ],
+      queryFieldNode,
+      true
+    );
+    expect(result).toEqual([
+      [{id: 1, title: 'title 1'}],
+      [
+        {id: 1, title: 'title 1'},
+        {id: 2, title: 'title 2'},
+      ],
+      [],
+      [],
+    ]);
+  });
+
+  it('matches by intersection if both child and parent key types are lists', () => {
+    const queryFieldNode = getQueryFieldNode(`#graphql
+      books { titles }
+    `);
+    const result = mapChildrenToParents(
+      [
+        {id: 1, titles: ['title 1', null]},
+        {id: 2, titles: ['title 1', 'title 2']},
+        {id: 3, titles: ['title 3']},
+        {id: 4, titles: null},
+      ],
+      [
+        {titles: ['title 1']},
+        {titles: ['title 1', 'title 2', 'title 3']},
+        {titles: ['title 2', 'title 3']},
+        {titles: ['title 3', null]},
+        {titles: null},
+      ],
+      queryFieldNode,
+      true
+    );
+    expect(result).toEqual([
+      [
+        {id: 1, titles: ['title 1', null]},
+        {id: 2, titles: ['title 1', 'title 2']},
+      ],
+      [
+        {id: 1, titles: ['title 1', null]},
+        {id: 2, titles: ['title 1', 'title 2']},
+        {id: 3, titles: ['title 3']},
+      ],
+      [
+        {id: 2, titles: ['title 1', 'title 2']},
+        {id: 3, titles: ['title 3']},
+      ],
+      [{id: 3, titles: ['title 3']}],
+      [],
     ]);
   });
 });
@@ -448,6 +558,172 @@ describe('GraphQLJoin', () => {
     });
   });
 
+  it('does not require key fields in user query selection set', async () => {
+    const wrappedSchema = wrapSchema({
+      schema,
+      transforms: [graphqlJoinTransform],
+    });
+    const result = await execute(
+      wrappedSchema,
+      parse(`#graphql
+        {
+          getReviewsById(ids: ["1", "2", "3", "4"]) {
+            body
+            product {
+              name
+            }
+          }
+        }
+      `)
+    );
+    expect(result).toEqual({
+      data: {
+        getReviewsById: [
+          {
+            body: 'Love it!',
+            product: {
+              name: 'Table',
+            },
+          },
+          {
+            body: 'Too expensive.',
+            product: {
+              name: 'Couch',
+            },
+          },
+          {
+            body: 'Could be better.',
+            product: {
+              name: 'Chair',
+            },
+          },
+          {
+            body: 'Prefer something else.',
+            product: {
+              name: 'Table',
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it('allows aliases that conflict with parent key name', async () => {
+    const wrappedSchema = wrapSchema({
+      schema,
+      transforms: [graphqlJoinTransform],
+    });
+    const result = await execute(
+      wrappedSchema,
+      parse(`#graphql
+        {
+          getReviewsById(ids: ["1", "2"]) {
+            id
+            product {
+              productId: name
+            }
+          }
+        }
+      `)
+    );
+    expect(result).toEqual({
+      data: {
+        getReviewsById: [
+          {
+            id: '1',
+            product: {
+              productId: 'Table',
+            },
+          },
+          {
+            id: '2',
+            product: {
+              productId: 'Couch',
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it('allows parent key aliases that conflict with another field in the child', async () => {
+    const wrappedSchema = wrapSchema({
+      schema: makeExecutableSchema({
+        typeDefs: `#graphql
+          type Query {
+            authors: [Author]
+            books: [Book]
+          }
+          type Author {
+            id: String
+            titles: [String]
+          }
+          type Book {
+            title: String
+            titles: Boolean
+          }
+        `,
+        resolvers: {
+          Query: {
+            authors: () => [
+              {id: 'author 1', titles: ['book 1', 'book 2']},
+              {id: 'author 2', titles: ['book 2', 'book 3']},
+            ],
+            books: () => [
+              {title: 'book 1', titles: true},
+              {title: 'book 2', titles: false},
+            ],
+          },
+        },
+      }),
+      transforms: [
+        new GraphQLJoin({
+          typeDefs: `#graphql
+            extend type Author {
+              books: [Book!]!
+            }
+          `,
+          resolvers: {
+            Author: {
+              books: 'books { titles: title }',
+            },
+          },
+        }),
+      ],
+    });
+    const result = await execute(
+      wrappedSchema,
+      parse(`#graphql
+        {
+          authors {
+            id
+            books {
+              title
+              titles
+            }
+          }
+        }
+      `)
+    );
+    expect(result).toEqual({
+      data: {
+        authors: [
+          {
+            id: 'author 1',
+            books: [
+              {title: 'book 1', titles: true},
+              {title: 'book 2', titles: false},
+            ],
+          },
+          {
+            id: 'author 2',
+            books: [{title: 'book 2', titles: false}],
+          },
+        ],
+      },
+    });
+  });
+
   it('supports nested relations', async () => {
     const wrappedSchema = wrapSchema({
       schema,
@@ -473,81 +749,79 @@ describe('GraphQLJoin', () => {
         }
       `)
     );
-    expect(result).toMatchInlineSnapshot(`
-      Object {
-        "data": Object {
-          "getReviewsById": Array [
-            Object {
-              "body": "Love it!",
-              "id": "1",
-              "product": Object {
-                "name": "Table",
-                "price": 899,
-                "reviews": Array [
-                  Object {
-                    "body": "Love it!",
-                    "id": "1",
-                  },
-                  Object {
-                    "body": "Prefer something else.",
-                    "id": "4",
-                  },
-                ],
-                "weight": 100,
-              },
+    expect(result).toEqual({
+      data: {
+        getReviewsById: [
+          {
+            id: '1',
+            body: 'Love it!',
+            product: {
+              name: 'Table',
+              price: 899,
+              weight: 100,
+              reviews: [
+                {
+                  id: '1',
+                  body: 'Love it!',
+                },
+                {
+                  id: '4',
+                  body: 'Prefer something else.',
+                },
+              ],
             },
-            Object {
-              "body": "Too expensive.",
-              "id": "2",
-              "product": Object {
-                "name": "Couch",
-                "price": 1299,
-                "reviews": Array [
-                  Object {
-                    "body": "Too expensive.",
-                    "id": "2",
-                  },
-                ],
-                "weight": 1000,
-              },
+          },
+          {
+            id: '2',
+            body: 'Too expensive.',
+            product: {
+              name: 'Couch',
+              price: 1299,
+              weight: 1000,
+              reviews: [
+                {
+                  id: '2',
+                  body: 'Too expensive.',
+                },
+              ],
             },
-            Object {
-              "body": "Could be better.",
-              "id": "3",
-              "product": Object {
-                "name": "Chair",
-                "price": 54,
-                "reviews": Array [
-                  Object {
-                    "body": "Could be better.",
-                    "id": "3",
-                  },
-                ],
-                "weight": 50,
-              },
+          },
+          {
+            id: '3',
+            body: 'Could be better.',
+            product: {
+              name: 'Chair',
+              price: 54,
+              weight: 50,
+              reviews: [
+                {
+                  id: '3',
+                  body: 'Could be better.',
+                },
+              ],
             },
-            Object {
-              "body": "Prefer something else.",
-              "id": "4",
-              "product": Object {
-                "name": "Table",
-                "price": 899,
-                "reviews": Array [
-                  Object {
-                    "body": "Love it!",
-                    "id": "1",
-                  },
-                  Object {
-                    "body": "Prefer something else.",
-                    "id": "4",
-                  },
-                ],
-                "weight": 100,
-              },
+          },
+          {
+            id: '4',
+            body: 'Prefer something else.',
+            product: {
+              name: 'Table',
+              price: 899,
+              weight: 100,
+              reviews: [
+                {
+                  id: '1',
+                  body: 'Love it!',
+                },
+                {
+                  id: '4',
+                  body: 'Prefer something else.',
+                },
+              ],
             },
-          ],
-        },
-      }
-    `);
+          },
+        ],
+      },
+    });
   });
 });

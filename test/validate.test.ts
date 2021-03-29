@@ -221,37 +221,6 @@ describe('validateFieldConfig', () => {
     );
   });
 
-  // TODO implement feature
-  it.skip('allows ID type to map to String', () => {
-    const schema = makeExecutableSchema({
-      typeDefs: `#graphql
-        type Query {
-          getReviewsByProductId(productIds: [String!]!): [Review!]!
-        }
-        type Product {
-          upc: ID!
-        }
-        type Review {
-          productId: String
-        }
-      `,
-    });
-    const typeDefs = `#graphql
-      extend type Product {
-        reviews: [Review]
-      }
-    `;
-    expect(() =>
-      validateFieldConfig(
-        'getReviewsByProductId(productIds: $upc) { upc: productId }',
-        'Product',
-        'reviews',
-        typeDefs,
-        schema
-      )
-    ).not.toThrow();
-  });
-
   it('rejects selection fields that are not scalars or scalar lists', () => {
     const schema = makeExecutableSchema({
       typeDefs: `#graphql
@@ -271,11 +240,6 @@ describe('validateFieldConfig', () => {
         }
       `,
     });
-    const typeDefs = `#graphql
-      extend type Product {
-        reviews: [Review]
-      }
-    `;
     expect(() =>
       validateFieldConfig(
         'getReviewsByProductId(productIds: $upc) { upc: productIdWrapper { id } }',
@@ -301,6 +265,66 @@ describe('validateFieldConfig', () => {
     );
   });
 
+  it('only allows a single selection field when its corresponding parent or child field is a list', () => {
+    const schema = makeExecutableSchema({
+      typeDefs: `#graphql
+        type Query {
+          getReviewsByProductId(productIds: [String!]!): [Review!]!
+        }
+        type Product {
+          upc: String!
+          name: String
+          reviewIds: [String]
+        }
+        type Review {
+          id: String!
+          name: String
+          productIds: [String]
+        }
+      `,
+    });
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upc: productIds }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).not.toThrow();
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upc: productIds, name }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Only one selection field is allowed when joining on a list type like Review.productIds.'
+    );
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { reviewIds: id }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).not.toThrow();
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { reviewIds: id, name }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Only one selection field is allowed when joining on a list type like Product.reviewIds.'
+    );
+  });
+
   it('allows custom scalar types', () => {
     const schema = makeExecutableSchema({
       typeDefs: `#graphql
@@ -316,11 +340,6 @@ describe('validateFieldConfig', () => {
         scalar BigInt
       `,
     });
-    const typeDefs = `#graphql
-      extend type Product {
-        reviews: [Review]
-      }
-    `;
     expect(() =>
       validateFieldConfig(
         'getReviewsByProductId(productIds: $upc) { upc: productId }',
@@ -332,7 +351,35 @@ describe('validateFieldConfig', () => {
     ).not.toThrow();
   });
 
-  it('rejects query with non-object return type (when unwrapped)', () => {
+  it('rejects query whose return type is not a list', () => {
+    const schema = makeExecutableSchema({
+      typeDefs: `#graphql
+        type Query {
+          getReview: Review!
+        }
+        type Product {
+          upc: String!
+        }
+        type Review {
+          id: String!
+          productId: String
+        }
+      `,
+    });
+    expect(() =>
+      validateFieldConfig(
+        'getReview { upc: productId }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Query must return a list of objects but instead returns Review!.'
+    );
+  });
+
+  it('rejects query with non-object return type when unwrapped', () => {
     const schema = makeExecutableSchema({
       typeDefs: `#graphql
         type Query {
@@ -357,7 +404,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Query must return an object or list of objects but instead returns [String]!.'
+      'graphql-join config error for resolver [Product.reviews]: Query must return a list of objects but instead returns [String]!.'
     );
   });
 

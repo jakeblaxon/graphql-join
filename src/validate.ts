@@ -19,6 +19,8 @@ import {
   DocumentNode,
   OperationDefinitionNode,
   isScalarType,
+  isListType,
+  isNonNullType,
 } from 'graphql';
 
 export function validateFieldConfig(
@@ -142,9 +144,12 @@ function validateReturnType(
   ]?.type;
   if (!returnType) throw Error('Could not find return type for query.');
   const unwrappedReturnType = unwrapType(returnType);
-  if (!isObjectType(unwrappedReturnType))
+  if (
+    !isListType(isNonNullType(returnType) ? returnType.ofType : returnType) ||
+    !isObjectType(unwrappedReturnType)
+  )
     throw Error(
-      `Query must return an object or list of objects but instead returns ${returnType.toString()}.`
+      `Query must return a list of objects but instead returns ${returnType}.`
     );
   let typeDefsDocument;
   try {
@@ -165,7 +170,7 @@ function validateReturnType(
     throw Error(
       `Query does not return the intended entity type ${
         unwrapTypeNode(intendedType).name.value
-      } for [${typeName}.${fieldName}]. Returns ${returnType.toString()}.`
+      } for [${typeName}.${fieldName}]. Returns ${returnType}.`
     );
   return unwrappedReturnType;
 }
@@ -175,7 +180,9 @@ function validateSelections(
   typeNode: ObjectTypeDefinitionNode,
   childType: GraphQLObjectType
 ) {
-  queryFieldNode.selectionSet?.selections.forEach(selection => {
+  const selections = queryFieldNode.selectionSet?.selections;
+  if (!selections) throw Error('Query must have a selection set.');
+  selections.forEach(selection => {
     if (selection.kind !== Kind.FIELD)
       throw Error('Fragments are not allowed in query.');
     const parentFieldName = selection.alias?.value || selection.name.value;
@@ -192,11 +199,19 @@ function validateSelections(
             : 'Use an alias to map the child field to the corresponding parent field.'
         }`
       );
+    if (parentFieldNode.type.kind === Kind.LIST_TYPE && selections.length > 1)
+      throw Error(
+        `Only one selection field is allowed when joining on a list type like ${typeNode.name.value}.${parentFieldName}.`
+      );
     const childFieldName = selection.name.value;
     const childFieldType = childType.getFields()[childFieldName]?.type;
     if (!childFieldType)
       throw Error(
         `Could not find type definition for [${childType.name}.${childFieldName}].`
+      );
+    if (isListType(childFieldType) && selections.length > 1)
+      throw Error(
+        `Only one selection field is allowed when joining on a list type like ${childType.name}.${childFieldName}.`
       );
     if (!isScalarType(unwrapType(childFieldType)))
       throw Error(

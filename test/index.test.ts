@@ -315,6 +315,25 @@ describe('mapChildrenToParents', () => {
 });
 
 describe('GraphQLJoin', () => {
+  const typeDefs = `#graphql
+    type Query {
+      getProductsById(ids: [String!]!): [Product!]!
+      getReviewsById(ids: [String!]!): [Review]
+      getReviewsByProductId(productIds: [String!]!): [Review!]!
+    }
+    type Product {
+      upc: String!
+      name: String
+      price: Int
+      weight: Int
+    }
+    type Review {
+      id: String!
+      body: String
+      productId: String!
+    }
+  `;
+
   const typeExtensions = `#graphql
     extend type Product {
       reviews: [Review!]!
@@ -324,41 +343,22 @@ describe('GraphQLJoin', () => {
     }
   `;
 
-  const schema = makeExecutableSchema({
-    typeDefs: `#graphql
-      type Query {
-        getProductsById(ids: [String!]!): [Product!]!
-        getReviewsById(ids: [String!]!): [Review!]!
-        getReviewsByProductId(productIds: [String!]!): [Review!]!
-      }
-      type Product {
-        upc: String!
-        name: String
-        price: Int
-        weight: Int
-      }
-      type Review {
-        id: String!
-        body: String
-        productId: String!
-      }
-    `,
-    resolvers: {
-      Query: {
-        getProductsById(parent: unknown, args: {ids: string[]}) {
-          return products.filter(product => args.ids.includes(product.upc));
-        },
-        getReviewsById(parent: unknown, args: {ids: string[]}) {
-          return reviews.filter(review => args.ids.includes(review.id));
-        },
-        getReviewsByProductId(parent: unknown, args: {productIds: string[]}) {
-          return reviews.filter(review =>
-            args.productIds.includes(review.productId)
-          );
-        },
+  const resolvers = {
+    Query: {
+      getProductsById(parent: unknown, args: {ids: string[]}) {
+        return products.filter(product => args.ids.includes(product.upc));
+      },
+      getReviewsById(parent: unknown, args: {ids: string[]}) {
+        return reviews.filter(review => args.ids.includes(review.id));
+      },
+      getReviewsByProductId(parent: unknown, args: {productIds: string[]}) {
+        return reviews.filter(review =>
+          args.productIds.includes(review.productId)
+        );
       },
     },
-  });
+  };
+
   const products = [
     {
       upc: '1',
@@ -379,6 +379,7 @@ describe('GraphQLJoin', () => {
       weight: 50,
     },
   ];
+
   const reviews = [
     {
       id: '1',
@@ -402,18 +403,52 @@ describe('GraphQLJoin', () => {
     },
   ];
 
-  it('works', async () => {
-    const graphqlJoinTransform = new GraphQLJoin({
-      typeDefs: typeExtensions,
-      resolvers: {
-        Review: {
-          product: 'getProductsById(ids: $productId) { productId: upc }',
-        },
-        Product: {
-          reviews: 'getReviewsByProductId(productIds: $upc) { upc: productId }',
-        },
+  const schema = makeExecutableSchema({
+    typeDefs,
+    resolvers,
+  });
+
+  const graphqlJoinTransform = new GraphQLJoin({
+    typeDefs: typeExtensions,
+    resolvers: {
+      Review: {
+        product: 'getProductsById(ids: $productId) { productId: upc }',
       },
+      Product: {
+        reviews: 'getReviewsByProductId(productIds: $upc) { upc: productId }',
+      },
+    },
+  });
+
+  it('propagates errors encountered when executing subqueries', async () => {
+    const wrappedSchema = wrapSchema({
+      schema: makeExecutableSchema({
+        typeDefs,
+        resolvers: {
+          Query: {
+            ...resolvers.Query,
+            getProductsById() {
+              throw Error('error in getProductsById');
+            },
+          },
+        },
+      }),
+      transforms: [graphqlJoinTransform],
     });
+    const result = await execute(
+      wrappedSchema,
+      parse(
+        '{ getReviewsById(ids: ["1", "2", "3", "4"]) { id product { name } } }'
+      )
+    );
+    expect(result.errors?.[0]).toEqual({
+      message: 'error in getProductsById',
+      locations: [],
+      path: ['getReviewsById', 0, 'product'],
+    });
+  });
+
+  it('supports nested relations', async () => {
     const wrappedSchema = wrapSchema({
       schema,
       transforms: [graphqlJoinTransform],

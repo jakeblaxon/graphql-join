@@ -583,81 +583,79 @@ describe('GraphQLJoin', () => {
         }
       `)
     );
-    expect(result).toMatchInlineSnapshot(`
-      Object {
-        "data": Object {
-          "getReviewsById": Array [
-            Object {
-              "body": "Love it!",
-              "id": "1",
-              "product": Object {
-                "name": "Table",
-                "price": 899,
-                "reviews": Array [
-                  Object {
-                    "body": "Love it!",
-                    "id": "1",
-                  },
-                  Object {
-                    "body": "Prefer something else.",
-                    "id": "4",
-                  },
-                ],
-                "weight": 100,
-              },
+    expect(result).toEqual({
+      data: {
+        getReviewsById: [
+          {
+            id: '1',
+            body: 'Love it!',
+            product: {
+              name: 'Table',
+              price: 899,
+              weight: 100,
+              reviews: [
+                {
+                  id: '1',
+                  body: 'Love it!',
+                },
+                {
+                  id: '4',
+                  body: 'Prefer something else.',
+                },
+              ],
             },
-            Object {
-              "body": "Too expensive.",
-              "id": "2",
-              "product": Object {
-                "name": "Couch",
-                "price": 1299,
-                "reviews": Array [
-                  Object {
-                    "body": "Too expensive.",
-                    "id": "2",
-                  },
-                ],
-                "weight": 1000,
-              },
+          },
+          {
+            id: '2',
+            body: 'Too expensive.',
+            product: {
+              name: 'Couch',
+              price: 1299,
+              weight: 1000,
+              reviews: [
+                {
+                  id: '2',
+                  body: 'Too expensive.',
+                },
+              ],
             },
-            Object {
-              "body": "Could be better.",
-              "id": "3",
-              "product": Object {
-                "name": "Chair",
-                "price": 54,
-                "reviews": Array [
-                  Object {
-                    "body": "Could be better.",
-                    "id": "3",
-                  },
-                ],
-                "weight": 50,
-              },
+          },
+          {
+            id: '3',
+            body: 'Could be better.',
+            product: {
+              name: 'Chair',
+              price: 54,
+              weight: 50,
+              reviews: [
+                {
+                  id: '3',
+                  body: 'Could be better.',
+                },
+              ],
             },
-            Object {
-              "body": "Prefer something else.",
-              "id": "4",
-              "product": Object {
-                "name": "Table",
-                "price": 899,
-                "reviews": Array [
-                  Object {
-                    "body": "Love it!",
-                    "id": "1",
-                  },
-                  Object {
-                    "body": "Prefer something else.",
-                    "id": "4",
-                  },
-                ],
-                "weight": 100,
-              },
+          },
+          {
+            id: '4',
+            body: 'Prefer something else.',
+            product: {
+              name: 'Table',
+              price: 899,
+              weight: 100,
+              reviews: [
+                {
+                  id: '1',
+                  body: 'Love it!',
+                },
+                {
+                  id: '4',
+                  body: 'Prefer something else.',
+                },
+              ],
             },
-          ],
-        },
-      }
-    `);
+          },
+        ],
+      },
+    });
   });
 });

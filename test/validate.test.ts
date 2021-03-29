@@ -332,7 +332,40 @@ describe('validateFieldConfig', () => {
     ).not.toThrow();
   });
 
-  it('rejects query with non-object return type (when unwrapped)', () => {
+  it('rejects query whose return type is not a list', () => {
+    const schema = makeExecutableSchema({
+      typeDefs: `#graphql
+        type Query {
+          getReview: Review!
+        }
+        type Product {
+          upc: String!
+        }
+        type Review {
+          id: String!
+          productId: String
+        }
+      `,
+    });
+    const typeDefs = `#graphql
+      extend type Product {
+        reviews: [Review]
+      }
+    `;
+    expect(() =>
+      validateFieldConfig(
+        'getReview { upc: productId }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).toThrow(
+      'graphql-join config error for resolver [Product.reviews]: Query must return a list of objects but instead returns Review!.'
+    );
+  });
+
+  it('rejects query with non-object return type when unwrapped', () => {
     const schema = makeExecutableSchema({
       typeDefs: `#graphql
         type Query {
@@ -357,7 +390,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Query must return an object or list of objects but instead returns [String]!.'
+      'graphql-join config error for resolver [Product.reviews]: Query must return a list of objects but instead returns [String]!.'
     );
   });
 

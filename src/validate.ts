@@ -19,6 +19,8 @@ import {
   DocumentNode,
   OperationDefinitionNode,
   isScalarType,
+  isListType,
+  isNonNullType,
 } from 'graphql';
 
 export function validateFieldConfig(
@@ -142,9 +144,12 @@ function validateReturnType(
   ]?.type;
   if (!returnType) throw Error('Could not find return type for query.');
   const unwrappedReturnType = unwrapType(returnType);
-  if (!isObjectType(unwrappedReturnType))
+  if (
+    !isListType(isNonNullType(returnType) ? returnType.ofType : returnType) ||
+    !isObjectType(unwrappedReturnType)
+  )
     throw Error(
-      `Query must return an object or list of objects but instead returns ${returnType.toString()}.`
+      `Query must return a list of objects but instead returns ${returnType}.`
     );
   let typeDefsDocument;
   try {
@@ -165,7 +170,7 @@ function validateReturnType(
     throw Error(
       `Query does not return the intended entity type ${
         unwrapTypeNode(intendedType).name.value
-      } for [${typeName}.${fieldName}]. Returns ${returnType.toString()}.`
+      } for [${typeName}.${fieldName}]. Returns ${returnType}.`
     );
   return unwrappedReturnType;
 }

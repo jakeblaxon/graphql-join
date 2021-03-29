@@ -448,7 +448,7 @@ describe('GraphQLJoin', () => {
     });
   });
 
-  it('works', async () => {
+  it('supports nested relations', async () => {
     const wrappedSchema = wrapSchema({
       schema,
       transforms: [graphqlJoinTransform],

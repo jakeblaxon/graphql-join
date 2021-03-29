@@ -131,7 +131,7 @@ export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
         Variable: node =>
           _(parents)
             .flatMap(parent => _.get(parent, node.name.value))
-            .filter(_.identity)
+            .filter(elt => elt !== null && elt !== undefined)
             .uniq()
             .value(),
       },

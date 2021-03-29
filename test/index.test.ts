@@ -176,15 +176,17 @@ describe('createArgsFromKeysFunction', () => {
       {title: 'title 1'},
       {title: 'title 2'},
       {title: 'title 2'},
+      {title: ''},
       {title: null},
+      {title: undefined},
     ];
-    expect(result(parentsScalar)).toEqual({titles: ['title 1', 'title 2']});
+    expect(result(parentsScalar)).toEqual({titles: ['title 1', 'title 2', '']});
     const parentsList = [
       {title: ['title 1', 'title 2']},
-      {title: ['title 2', null]},
-      {title: null},
+      {title: ['title 2', '', null]},
+      {title: undefined},
     ];
-    expect(result(parentsList)).toEqual({titles: ['title 1', 'title 2']});
+    expect(result(parentsList)).toEqual({titles: ['title 1', 'title 2', '']});
   });
 
   it('handles variables in lists properly', () => {

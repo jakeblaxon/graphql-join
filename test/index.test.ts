@@ -608,6 +608,122 @@ describe('GraphQLJoin', () => {
     });
   });
 
+  it('allows aliases that conflict with parent key name', async () => {
+    const wrappedSchema = wrapSchema({
+      schema,
+      transforms: [graphqlJoinTransform],
+    });
+    const result = await execute(
+      wrappedSchema,
+      parse(`#graphql
+        {
+          getReviewsById(ids: ["1", "2"]) {
+            id
+            product {
+              productId: name
+            }
+          }
+        }
+      `)
+    );
+    expect(result).toEqual({
+      data: {
+        getReviewsById: [
+          {
+            id: '1',
+            product: {
+              productId: 'Table',
+            },
+          },
+          {
+            id: '2',
+            product: {
+              productId: 'Couch',
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it('allows parent key aliases that conflict with another field in the child', async () => {
+    const wrappedSchema = wrapSchema({
+      schema: makeExecutableSchema({
+        typeDefs: `#graphql
+          type Query {
+            authors: [Author]
+            books: [Book]
+          }
+          type Author {
+            id: String
+            titles: [String]
+          }
+          type Book {
+            title: String
+            titles: Boolean
+          }
+        `,
+        resolvers: {
+          Query: {
+            authors: () => [
+              {id: 'author 1', titles: ['book 1', 'book 2']},
+              {id: 'author 2', titles: ['book 2', 'book 3']},
+            ],
+            books: () => [
+              {title: 'book 1', titles: true},
+              {title: 'book 2', titles: false},
+            ],
+          },
+        },
+      }),
+      transforms: [
+        new GraphQLJoin({
+          typeDefs: `#graphql
+            extend type Author {
+              books: [Book!]!
+            }
+          `,
+          resolvers: {
+            Author: {
+              books: 'books { titles: title }',
+            },
+          },
+        }),
+      ],
+    });
+    const result = await execute(
+      wrappedSchema,
+      parse(`#graphql
+        {
+          authors {
+            id
+            books {
+              title
+              titles
+            }
+          }
+        }
+      `)
+    );
+    expect(result).toEqual({
+      data: {
+        authors: [
+          {
+            id: 'author 1',
+            books: [
+              {title: 'book 1', titles: true},
+              {title: 'book 2', titles: false},
+            ],
+          },
+          {
+            id: 'author 2',
+            books: [{title: 'book 2', titles: false}],
+          },
+        ],
+      },
+    });
+  });
+
   it('supports nested relations', async () => {
     const wrappedSchema = wrapSchema({
       schema,

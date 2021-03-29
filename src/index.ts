@@ -173,7 +173,7 @@ export function mapChildrenToParents(
           .uniq()
           .value()
       )
-      .map(group => (toManyRelation ? group : group[0] || null));
+      .map(group => (toManyRelation ? group || [] : group?.[0] ?? null));
   } else {
     const childrenByKey = _.groupBy(children, child =>
       JSON.stringify(_.at(child, childKeyFields))

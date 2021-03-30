@@ -138,7 +138,7 @@ You can also add a symmetrical relation to your config like the following:
   `,
   resolvers: {
     Author: {
-      books: `getBooksByAuthorIds(ids: $ids) { id: authorIds }`
+      books: `getBooksByAuthorIds(ids: $id) { id: authorIds }`
     },
     Book: {
       authors: `getAuthors(ids: $authorIds) { authorIds: id }`

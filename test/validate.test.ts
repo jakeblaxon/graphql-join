@@ -1,3 +1,11 @@
+import {
+  list,
+  makeSchema,
+  nonNull,
+  objectType,
+  queryType,
+  stringArg,
+} from 'nexus';
 import {makeExecutableSchema} from '@graphql-tools/schema';
 import {validateFieldConfig} from '../src/validate';
 
@@ -478,6 +486,48 @@ describe('validateFieldConfig', () => {
     expect(() =>
       validateFieldConfig(
         'getReviewsByProductId(productIds: $upc) { upc: productId, price: id }',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      )
+    ).not.toThrow();
+  });
+
+  it('works with schemas with null ast nodes', () => {
+    const Product = objectType({
+      name: 'Product',
+      definition(t) {
+        t.nonNull.string('upc');
+        t.string('name');
+        t.int('price');
+      },
+    });
+    const Review = objectType({
+      name: 'Review',
+      definition(t) {
+        t.nonNull.int('id');
+        t.string('body');
+        t.nonNull.string('productId');
+      },
+    });
+    const Query = queryType({
+      definition(t) {
+        t.field('getReviewsByProductId', {
+          type: nonNull(list(nonNull(Review))),
+          args: {
+            productIds: nonNull(list(nonNull(stringArg()))),
+          },
+        });
+      },
+    });
+    const schema = makeSchema({
+      types: [Product, Review, Query],
+    });
+    expect(schema.getType('Product')?.astNode).toBeUndefined();
+    expect(() =>
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: $upc) { upc: productId }',
         'Product',
         'reviews',
         typeDefs,

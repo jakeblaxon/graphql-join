@@ -138,7 +138,7 @@ You can also add a symmetrical relation to your config like the following:
   `,
   resolvers: {
     Author: {
-      books: `getBooksByAuthorIds(ids: $authorIds) { id: authorIds }`
+      books: `getBooksByAuthorIds(ids: $ids) { id: authorIds }`
     },
     Book: {
       authors: `getAuthors(ids: $authorIds) { authorIds: id }`
@@ -155,7 +155,7 @@ As a final note, if you are going to join on a list, then the list can only cont
 
 Using GraphQL-Join has several benefits:
 
-- It's simple. The configuration is declarative, concise, and written in conventional GraphQL SDL. No new syntax to learn, no complex logic to parse, and no need to modify selection sets.
+- It's simple. The configuration is declarative, concise, and written in conventional GraphQL SDL. No new syntax to learn, no complex logic to parse, and no need to modify selection sets in code.
 - It's fast. The joining logic is always O(n), regardless of whether you're matching on scalars or lists.
 - It's type-safe. GraphQL-Join checks on initialization if the variable fields and return type match their expected types. It also validates the query against the schema. If any of these checks fail, it errors out. This guards against silent failures as the underlying schema evolves.
 - It works natively with other libraries, like [graphql-tools](https://www.graphql-tools.com) and [graphql-mesh](https://www.graphql-mesh.com). This allows for even further schema manipulations with minimal user effort.

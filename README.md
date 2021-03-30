@@ -4,6 +4,12 @@ Join types together in your schema purely with SDL. Let GraphQL-Join handle the 
 
 *Warning*: This library is new and is still evolving. Breaking changes will occur. Use it at your own risk.
 
+## Getting Started
+
+```
+npm install jakeblaxon-graphql-join graphql
+```
+
 ## Example
 
 Say you have a GraphQL schema that looks like the following:
@@ -54,6 +60,7 @@ You can implement this pattern in code, but it becomes tedious and hard to read 
 GraphQL-Join aims to solve these issues by abstracting away the details. All you need to provide is an SDL string that describes the subquery to make. The following schema transform implements the same pattern, but is much more readable:
 
 ```js
+import GraphQLJoinTransform from 'jakeblaxon-graphql-join';
 import {wrapSchema} from '@graphql-tools/wrap';
 
 const graphqlJoinTransform = new GraphQLJoinTransform({

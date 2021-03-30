@@ -40,7 +40,7 @@ export function validateFieldConfig(
     }
   }
 
-  // re-build schema, as its ast nodes may be undefined
+  // rebuild schema, as its ast nodes may be undefined
   schema = buildSchema(printSchema(schema));
 
   let document: DocumentNode;

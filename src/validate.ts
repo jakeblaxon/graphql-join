@@ -21,6 +21,8 @@ import {
   isScalarType,
   isListType,
   isNonNullType,
+  buildSchema,
+  printSchema,
 } from 'graphql';
 
 export function validateFieldConfig(
@@ -38,7 +40,10 @@ export function validateFieldConfig(
     }
   }
 
-  let document;
+  // re-build schema, as its ast nodes may be undefined
+  schema = buildSchema(printSchema(schema));
+
+  let document: DocumentNode;
   try {
     document = parse(`{${fieldConfig}}`);
   } catch (e) {

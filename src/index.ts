@@ -22,28 +22,29 @@ export interface GraphQLJoinConfig {
     };
   };
 }
-
 interface GraphQLMeshConfig {
   config: GraphQLJoinConfig;
 }
 
 export default class GraphQLJoinTransform implements Transform {
-  constructor(private config: GraphQLJoinConfig) {}
+  private config: GraphQLJoinConfig;
+
+  constructor(config: GraphQLJoinConfig) {
+    this.config = ((config as any) as GraphQLMeshConfig).config || config;
+  }
 
   public transformSchema(originalSchema: GraphQLSchema) {
-    const {typeDefs, resolvers} =
-      ((this.config as any) as GraphQLMeshConfig).config || this.config;
     return stitchSchemas({
       subschemas: [originalSchema],
-      typeDefs,
-      resolvers: _.mapValues(resolvers, (typeConfig, typeName) =>
+      typeDefs: this.config.typeDefs,
+      resolvers: _.mapValues(this.config.resolvers, (typeConfig, typeName) =>
         _.mapValues(typeConfig, (fieldConfig, fieldName) => {
           return createFieldResolver(
             validateFieldConfig(
               fieldConfig,
               typeName,
               fieldName,
-              typeDefs,
+              this.config.typeDefs,
               originalSchema
             ),
             originalSchema

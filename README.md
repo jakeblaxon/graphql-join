@@ -49,7 +49,7 @@ note over Gateway: join Authors to Books\nbased on authorId
 Gateway->Client:
 -->
 
-You can implement this pattern in code, but it becomes tedious and hard to read the more joins you add. It's also error-prone and not type-safe. As the underlying schema changes, old resolver logic can quietly become obsolete.
+You can implement this pattern in code, but it becomes tedious and hard to read the more joins you add. It's also error-prone and not type-safe. As the underlying schema changes, old resolver logic can quietly become obsolete and begin to fail.
 
 GraphQL-Join aims to solve these issues by abstracting away the details. All you need to provide is an SDL string that describes the subquery to make. The following schema transform implements the same pattern, but is much more readable:
 

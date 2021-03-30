@@ -2,6 +2,8 @@
 
 Join types together in your schema purely with SDL. Let GraphQL-Join handle the rest.
 
+*Warning*: This library is new and is still evolving. Breaking changes will occur. Use it at your own risk.
+
 ## Example
 
 Say you have a GraphQL schema that looks like the following:

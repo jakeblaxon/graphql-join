@@ -40,7 +40,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Syntax Error: Expected Name, found ")".'
+      'graphql-join config error for resolver "Product.reviews": Syntax Error: Expected Name, found ")".'
     );
   });
 
@@ -54,7 +54,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Syntax Error: Expected Name, found "{".'
+      'graphql-join config error for resolver "Product.reviews": Syntax Error: Expected Name, found "{".'
     );
     expect(() =>
       validateFieldConfig(
@@ -65,7 +65,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Cannot query field "query" on type "Query"'
+      'graphql-join config error for resolver "Product.reviews": Cannot query field "query" on type "Query"'
     );
     expect(() =>
       validateFieldConfig(
@@ -76,7 +76,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Multiple queries or fragments are not allowed.'
+      'graphql-join config error for resolver "Product.reviews": Multiple queries or fragments are not allowed.'
     );
   });
 
@@ -90,7 +90,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Multiple queries or fragments are not allowed.'
+      'graphql-join config error for resolver "Product.reviews": Multiple queries or fragments are not allowed.'
     );
   });
 
@@ -104,7 +104,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Cannot query field "unknownQueryName" on type "Query"'
+      'graphql-join config error for resolver "Product.reviews": Cannot query field "unknownQueryName" on type "Query"'
     );
   });
 
@@ -118,7 +118,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Unknown argument "all" on field "Query.getReviewsByProductId".'
+      'graphql-join config error for resolver "Product.reviews": Unknown argument "all" on field "Query.getReviewsByProductId".'
     );
   });
 
@@ -132,7 +132,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Field corresponding to $upcs not found in type Product.'
+      'graphql-join config error for resolver "Product.reviews": Field corresponding to "$upcs" not found in type "Product".'
     );
   });
 
@@ -146,7 +146,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Variable "$price" of type "[Int!]!" used in position expecting type "[String!]!".'
+      'graphql-join config error for resolver "Product.reviews": Variable "$price" of type "[Int!]!" used in position expecting type "[String!]!".'
     );
   });
 
@@ -160,7 +160,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Field "getReviewsByProductId" of type "[Review!]!" must have a selection of subfields. ' +
+      'graphql-join config error for resolver "Product.reviews": Field "getReviewsByProductId" of type "[Review!]!" must have a selection of subfields. ' +
         'Did you mean "getReviewsByProductId { ... }"?'
     );
   });
@@ -175,7 +175,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Cannot query field "upc" on type "Review".'
+      'graphql-join config error for resolver "Product.reviews": Cannot query field "upc" on type "Review".'
     );
   });
 
@@ -189,7 +189,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Field corresponding to [productId] in selection set not found in type [Product]. ' +
+      'graphql-join config error for resolver "Product.reviews": Field corresponding to "productId" in selection set not found in type "Product". ' +
         'Use an alias to map the child field to the corresponding parent field.'
     );
     expect(() =>
@@ -201,7 +201,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Field corresponding to [upcs] in selection set not found in type [Product]. ' +
+      'graphql-join config error for resolver "Product.reviews": Field corresponding to "upcs" in selection set not found in type "Product". ' +
         'Make sure the alias is correctly spelled.'
     );
   });
@@ -216,8 +216,8 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Cannot join on keys [Product.price] and [Review.productId]. ' +
-        'They are different types: Int and String.'
+      'graphql-join config error for resolver "Product.reviews": Cannot join on keys "Product.price" and "Review.productId". ' +
+        'They are different types: "Int" and "String".'
     );
   });
 
@@ -249,7 +249,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Cannot join on key [Review.productIdWrapper]. Join keys must be scalars or scalar lists.'
+      'graphql-join config error for resolver "Product.reviews": Cannot join on key "Review.productIdWrapper". Join keys must be scalars or scalar lists.'
     );
     expect(() =>
       validateFieldConfig(
@@ -260,8 +260,8 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Cannot join on keys [Product.productIdWrapper] and [Review.productId]. ' +
-        'They are different types: ProductIdWrapper and String.'
+      'graphql-join config error for resolver "Product.reviews": Cannot join on keys "Product.productIdWrapper" and "Review.productId". ' +
+        'They are different types: "ProductIdWrapper" and "String".'
     );
   });
 
@@ -301,7 +301,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Only one selection field is allowed when joining on a list type like Review.productIds.'
+      'graphql-join config error for resolver "Product.reviews": Only one selection field is allowed when joining on a list type like "Review.productIds".'
     );
     expect(() =>
       validateFieldConfig(
@@ -321,7 +321,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Only one selection field is allowed when joining on a list type like Product.reviewIds.'
+      'graphql-join config error for resolver "Product.reviews": Only one selection field is allowed when joining on a list type like "Product.reviewIds".'
     );
   });
 
@@ -375,7 +375,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Query must return a list of objects but instead returns Review!.'
+      'graphql-join config error for resolver "Product.reviews": Query must return a list of objects but instead returns "Review!".'
     );
   });
 
@@ -404,7 +404,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Query must return a list of objects but instead returns [String]!.'
+      'graphql-join config error for resolver "Product.reviews": Query must return a list of objects but instead returns "[String]!".'
     );
   });
 
@@ -418,7 +418,8 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Query does not return the intended entity type Review for [Product.reviews]. Returns [User].'
+      'graphql-join config error for resolver "Product.reviews": ' +
+        'Query does not return the intended entity type "Review" for "Product.reviews". Returns "[User]".'
     );
   });
 
@@ -432,7 +433,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Multiple queries or fragments are not allowed.'
+      'graphql-join config error for resolver "Product.reviews": Multiple queries or fragments are not allowed.'
     );
     expect(() =>
       validateFieldConfig(
@@ -443,7 +444,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: Fragments are not allowed in query.'
+      'graphql-join config error for resolver "Product.reviews": Fragments are not allowed in query.'
     );
   });
 
@@ -460,7 +461,7 @@ describe('validateFieldConfig', () => {
         schema
       )
     ).toThrow(
-      'graphql-join config error for resolver [Product.reviews]: typeDefs is invalid: Syntax Error: Expected Name, found "}".'
+      'graphql-join config error for resolver "Product.reviews": typeDefs is invalid: Syntax Error: Expected Name, found "}".'
     );
   });
 

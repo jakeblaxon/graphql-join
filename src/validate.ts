@@ -33,7 +33,7 @@ export function validateFieldConfig(
   class ValidationError extends Error {
     constructor(message: string) {
       super(
-        `graphql-join config error for resolver [${typeName}.${fieldName}]: ${message}`
+        `graphql-join config error for resolver "${typeName}.${fieldName}": ${message}`
       );
     }
   }
@@ -54,7 +54,7 @@ export function validateFieldConfig(
     throw new ValidationError('Query type must be a field node.');
   const typeNode = schema.getType(typeName)?.astNode;
   if (typeNode?.kind !== Kind.OBJECT_TYPE_DEFINITION)
-    throw new ValidationError(`Type ${typeName} must be an object type.`);
+    throw new ValidationError(`Type "${typeName}" must be an object type.`);
 
   try {
     validateArguments(operationDefinition, typeNode, document, schema);
@@ -91,7 +91,7 @@ function validateArguments(
     );
     if (!fieldNode)
       throw Error(
-        `Field corresponding to $${variableName} not found in type ${typeNode.name.value}.`
+        `Field corresponding to "$${variableName}" not found in type "${typeNode.name.value}".`
       );
     return {
       kind: Kind.VARIABLE_DEFINITION,
@@ -149,7 +149,7 @@ function validateReturnType(
     !isObjectType(unwrappedReturnType)
   )
     throw Error(
-      `Query must return a list of objects but instead returns ${returnType}.`
+      `Query must return a list of objects but instead returns "${returnType}".`
     );
   let typeDefsDocument;
   try {
@@ -165,12 +165,12 @@ function validateReturnType(
       node.name.value === fieldName ? (intendedType = node.type) : undefined,
   });
   if (!intendedType)
-    throw Error(`Field [${typeName}.${fieldName}] not found in typeDefs.`);
+    throw Error(`Field "${typeName}.${fieldName}" not found in typeDefs.`);
   if (unwrapTypeNode(intendedType).name.value !== unwrappedReturnType.name)
     throw Error(
-      `Query does not return the intended entity type ${
+      `Query does not return the intended entity type "${
         unwrapTypeNode(intendedType).name.value
-      } for [${typeName}.${fieldName}]. Returns ${returnType}.`
+      }" for "${typeName}.${fieldName}". Returns "${returnType}".`
     );
   return unwrappedReturnType;
 }
@@ -191,9 +191,9 @@ function validateSelections(
     );
     if (!parentFieldNode)
       throw Error(
-        `Field corresponding to [${parentFieldName}] in selection set not found in type [${
+        `Field corresponding to "${parentFieldName}" in selection set not found in type "${
           typeNode.name.value
-        }]. ${
+        }". ${
           selection.alias
             ? 'Make sure the alias is correctly spelled.'
             : 'Use an alias to map the child field to the corresponding parent field.'
@@ -201,32 +201,32 @@ function validateSelections(
       );
     if (parentFieldNode.type.kind === Kind.LIST_TYPE && selections.length > 1)
       throw Error(
-        `Only one selection field is allowed when joining on a list type like ${typeNode.name.value}.${parentFieldName}.`
+        `Only one selection field is allowed when joining on a list type like "${typeNode.name.value}.${parentFieldName}".`
       );
     const childFieldName = selection.name.value;
     const childFieldType = childType.getFields()[childFieldName]?.type;
     if (!childFieldType)
       throw Error(
-        `Could not find type definition for [${childType.name}.${childFieldName}].`
+        `Could not find type definition for "${childType.name}.${childFieldName}".`
       );
     if (isListType(childFieldType) && selections.length > 1)
       throw Error(
-        `Only one selection field is allowed when joining on a list type like ${childType.name}.${childFieldName}.`
+        `Only one selection field is allowed when joining on a list type like "${childType.name}.${childFieldName}".`
       );
     if (!isScalarType(unwrapType(childFieldType)))
       throw Error(
-        `Cannot join on key [${childType.name}.${childFieldName}]. Join keys must be scalars or scalar lists.`
+        `Cannot join on key "${childType.name}.${childFieldName}". Join keys must be scalars or scalar lists.`
       );
     if (
       unwrapType(childFieldType).name !==
       unwrapTypeNode(parentFieldNode.type).name.value
     )
       throw Error(
-        `Cannot join on keys [${typeNode.name.value}.${parentFieldName}] and [${
+        `Cannot join on keys "${typeNode.name.value}.${parentFieldName}" and "${
           childType.name
-        }.${childFieldName}]. They are different types: ${
+        }.${childFieldName}". They are different types: "${
           unwrapTypeNode(parentFieldNode.type).name.value
-        } and ${unwrapType(childFieldType).name}.`
+        }" and "${unwrapType(childFieldType).name}".`
       );
   });
 }

@@ -23,7 +23,7 @@ export interface GraphQLJoinConfig {
   };
 }
 
-export class GraphQLJoin implements Transform {
+export class GraphQLJoinTransform implements Transform {
   constructor(private config: GraphQLJoinConfig) {}
   public transformSchema(originalSchema: GraphQLSchema) {
     return stitchSchemas({
@@ -173,7 +173,7 @@ export function mapChildrenToParents(
           .uniq()
           .value()
       )
-      .map(group => (toManyRelation ? group : group[0] || null));
+      .map(group => (toManyRelation ? group || [] : group?.[0] ?? null));
   } else {
     const childrenByKey = _.groupBy(children, child =>
       JSON.stringify(_.at(child, childKeyFields))

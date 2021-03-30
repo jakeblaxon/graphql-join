@@ -47,7 +47,7 @@ note over Gateway: join Authors to Books\nbased on authorId
 Gateway->Client:
 -->
 
-You can implement this pattern in code, but it becomes tedious and hard to read the more joins you add. It's also error-prone and not type safe. As the underlying schema changes, old resolver logic can quietly become obsolete.
+You can implement this pattern in code, but it becomes tedious and hard to read the more joins you add. It's also error-prone and not type-safe. As the underlying schema changes, old resolver logic can quietly become obsolete.
 
 GraphQL-Join aims to solve these issues by abstracting away the details. All you need to provide is an SDL string that describes the subquery to make. The following schema transform implements the same pattern, but is much more readable:
 
@@ -141,3 +141,16 @@ You can also add a symmetrical relation to your config like the following:
 Note that in this case we have to call a new query `getBooksByAuthorIds` because we don't have access to book ids in `Author`.
 
 As a final note, if you are going to join on a list, then the list can only contain scalar values, and you can only use this one field to join on. GraphQL-Join will not let you use more than one selection if the selection is a list type. This is because it's unclear how to match in this case, as there are multiple options that lead to different results.
+
+## Benefits
+
+Using GraphQL-Join has several benefits:
+
+- It's simple. The configuration is declarative, concise, and written in conventional GraphQL SDL. No new syntax to learn, no complex logic to parse, and no need to modify selection sets.
+- It's fast. The joining logic is always O(n), regardless of whether you're matching on scalars or lists.
+- It's type-safe. GraphQL-Join checks on initialization if the variable fields and return type match their expected types. It also validates the query against the schema. If any of these checks fail, it errors out. This guards against silent failures as the underlying schema evolves.
+- It works natively with other libraries, like [graphql-tools](https://www.graphql-tools.com) and [graphql-mesh](https://www.graphql-mesh.com). This allows for even further schema manipulations with minimal user effort.
+
+## Contributing
+
+GraphQL-Join is a new library and is still evolving. If you have an idea on how to improve it, please open an issue on GitHub, or fork this library and create a pull request.

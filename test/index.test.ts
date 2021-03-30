@@ -1,11 +1,10 @@
 import {execute, Kind, parse, print} from 'graphql';
 import {makeExecutableSchema} from '@graphql-tools/schema';
 import {wrapSchema} from '@graphql-tools/wrap';
-import {
+import GraphQLJoinTransform, {
   createArgsFromKeysFunction,
   createChildSelectionSet,
   createParentSelectionSet,
-  GraphQLJoinTransform,
   mapChildrenToParents,
 } from '../src';
 

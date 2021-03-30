@@ -1,13 +1,26 @@
 {
-  "name": "graphql-join",
+  "name": "jakeblaxon-graphql-join",
   "version": "0.0.0",
+  "description": "Join types together in your schema purely with SDL. Let GraphQL-Join handle the rest.",
   "main": "build/src/index.js",
   "types": "build/src/index.d.ts",
   "files": [
     "build/src"
   ],
   "license": "MIT",
-  "keywords": [],
+  "keywords": [
+    "GraphQL",
+    "Join",
+    "Batch",
+    "Stitching",
+    "Schema Stitching",
+    "JavaScript",
+    "TypeScript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jakeblaxon/graphql-join.git"
+  },
   "scripts": {
     "test": "jest",
     "lint": "gts lint",

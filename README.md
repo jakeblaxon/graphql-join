@@ -10,6 +10,8 @@ Join types together in your schema purely with SDL. Let GraphQL-Join handle the 
 npm install jakeblaxon-graphql-join graphql
 ```
 
+Once these packages are installed, you can create a GraphQL-Join transform and wrap your original schema with it to create the gateway schema. You can [view the demo](https://codesandbox.io/s/github/jakeblaxon/graphql-join-demo) that goes along with the example below.
+
 ## Example
 
 Say you have a GraphQL schema that looks like the following:
@@ -86,7 +88,7 @@ The `typeDefs` field describes the overall joins you'd like to add, whereas the 
 
 - `getAuthors` is the name of the batched query. It will retrieve every author for the books in one call to prevent the n+1 problem.
 - The `$authorId` variable indicates what field of the parent type (`Book`) we wish to pass to the parameters. Behind the scenes, GraphQL-Join collects all distinct `authorId` fields of each book into a list and filters out any `null` values. The type of `$authorId` is therefore always `[String!]!`. Each field within the parent type has a corresponding variable of the same name you can use in the parameters. They are always distinct, non-null lists of the field's type.
-- The `{ authorId: id }` selection indicates which fields in the parent and child to join on. If they are different names, simply use an alias to map them together. Here we are saying to match authors to books where `Book.authorId = Author.id`. You can select more than one field, as long as they are all scalar types. GraphQL-Join will consider a pairing a match if all corresponding fields match.
+- The `{ authorId: id }` selection indicates which fields in the parent and child to join on. Since they are different names, we use an alias to map them together. Here we are saying to match authors to books where `Book.authorId = Author.id`. You can select more than one field, as long as they are all scalar types. GraphQL-Join will consider a pairing a match if all corresponding fields match.
 
 GraphQL-Join doesn't call this query exactly as written. It simply uses the information within it to generate a custom query for each request. Behind the scenes, GraphQL-Join will strip the aliases and add the user requested fields to the selection set, to get all the required information in one call.
 

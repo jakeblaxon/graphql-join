@@ -2,12 +2,12 @@
 
 Join types together in your schema purely with SDL. Let GraphQL-Join handle the rest.
 
-*Warning*: This library is new and is still evolving. Breaking changes will occur. Use it at your own risk.
+*Warning*: This library is new and still evolving. Breaking changes will occur. Use it at your own risk.
 
 ## Getting Started
 
 ```
-npm install jakeblaxon-graphql-join graphql
+npm install graphql-join-transform graphql
 ```
 
 Once these packages are installed, you can create a GraphQL-Join transform and wrap your original schema with it to create the gateway schema. You can [view the demo](https://codesandbox.io/s/github/jakeblaxon/graphql-join-demo) that goes along with the example below.
@@ -62,7 +62,7 @@ You can implement this pattern in code, but it becomes tedious and hard to read 
 GraphQL-Join aims to solve these issues by abstracting away the details. All you need to provide is an SDL string that describes the subquery to make. The following schema transform implements the same pattern, but is much more readable:
 
 ```js
-import GraphQLJoinTransform from 'jakeblaxon-graphql-join';
+import GraphQLJoinTransform from 'graphql-join-transform';
 import {wrapSchema} from '@graphql-tools/wrap';
 
 const graphqlJoinTransform = new GraphQLJoinTransform({

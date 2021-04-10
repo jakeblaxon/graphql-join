@@ -720,7 +720,7 @@ describe('validateFieldConfig', () => {
       ).not.toThrow();
     });
 
-    it('enforces nullability coercion', () => {
+    it('enforces that return type is the same as or a stricter subset of the intended type', () => {
       const typeDefs = `#graphql
         extend type Product {
           reviews_Nullable_All: [Review!]

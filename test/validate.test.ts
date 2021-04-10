@@ -400,7 +400,7 @@ describe('validateFieldConfig', () => {
     });
     const typeDefs = `#graphql
       extend type Product {
-        strings: [String]
+        reviews: [String]
       }
     `;
     expect(() =>
@@ -547,7 +547,7 @@ describe('validateFieldConfig', () => {
         schema
       );
       expect(consoleSpy).toHaveBeenCalledWith(
-        'graphql-join warning for resolver "Product.reviews": use of unbatched queries is not recommended as it results in the n+1 problem.'
+        'graphql-join warning for resolver "Product.reviews": Use of unbatched queries is not recommended as it results in the n+1 problem.'
       );
     });
 
@@ -633,7 +633,7 @@ describe('validateFieldConfig', () => {
       );
       expect(() =>
         validateFieldConfig(
-          'getReviewsByProductId(productId: $upc) @unbatched',
+          'getReviewsByProductId(productIds: [$upc]) @unbatched',
           'Product',
           'reviews',
           typeDefs,
@@ -642,7 +642,7 @@ describe('validateFieldConfig', () => {
       ).not.toThrow();
     });
 
-    const schema = makeExecutableSchema({
+    const nullableSchema = makeExecutableSchema({
       typeDefs: `#graphql
         type Query {
           getReviewByProductId_NonNullable(productId: String!): Review!
@@ -670,11 +670,11 @@ describe('validateFieldConfig', () => {
       `;
       expect(() =>
         validateFieldConfig(
-          'getReviewsByProductId_NonNullable(productId: $upc) @unbatched',
+          'getReviewsByProductId_NonNullable(productIds: [$upc]) @unbatched',
           'Product',
           'review',
           typeDefs,
-          schema
+          nullableSchema
         )
       ).toThrow(
         'graphql-join config error for resolver "Product.review": ' +
@@ -686,7 +686,7 @@ describe('validateFieldConfig', () => {
           'Product',
           'review',
           typeDefs,
-          schema
+          nullableSchema
         )
       ).not.toThrow();
     });
@@ -703,7 +703,7 @@ describe('validateFieldConfig', () => {
           'Product',
           'reviews',
           typeDefs,
-          schema
+          nullableSchema
         )
       ).toThrow(
         'graphql-join config error for resolver "Product.reviews": ' +
@@ -715,7 +715,7 @@ describe('validateFieldConfig', () => {
           'Product',
           'reviews',
           typeDefs,
-          schema
+          nullableSchema
         )
       ).not.toThrow();
     });
@@ -731,11 +731,11 @@ describe('validateFieldConfig', () => {
       `;
       expect(() =>
         validateFieldConfig(
-          'getReviewsByProductId_Nullable(productId: $upc) @unbatched',
+          'getReviewsByProductId_Nullable(productIds: [$upc]) @unbatched',
           'Product',
           'reviews_NonNullable',
           typeDefs,
-          schema
+          nullableSchema
         )
       ).toThrow(
         'graphql-join config error for resolver "Product.reviews_NonNullable": ' +
@@ -743,11 +743,11 @@ describe('validateFieldConfig', () => {
       );
       expect(() =>
         validateFieldConfig(
-          'getReviewsByProductId_Nullable(productId: $upc) @unbatched',
+          'getReviewsByProductId_Nullable(productIds: [$upc]) @unbatched',
           'Product',
           'reviews_Nullable_Outer',
           typeDefs,
-          schema
+          nullableSchema
         )
       ).toThrow(
         'graphql-join config error for resolver "Product.reviews_Nullable_Outer": ' +
@@ -755,11 +755,11 @@ describe('validateFieldConfig', () => {
       );
       expect(() =>
         validateFieldConfig(
-          'getReviewsByProductId_Nullable(productId: $upc) @unbatched',
+          'getReviewsByProductId_Nullable(productIds: [$upc]) @unbatched',
           'Product',
           'reviews_Nullable_Inner',
           typeDefs,
-          schema
+          nullableSchema
         )
       ).toThrow(
         'graphql-join config error for resolver "Product.reviews_Nullable_Inner": ' +
@@ -771,7 +771,7 @@ describe('validateFieldConfig', () => {
           'Product',
           'reviews_Nullable_All',
           typeDefs,
-          schema
+          nullableSchema
         )
       ).not.toThrow();
     });

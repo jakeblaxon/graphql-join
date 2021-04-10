@@ -70,6 +70,7 @@ class Validator {
     } catch (e) {
       throw this.error(e);
     }
+
     this.isUnbatched = false;
     this.document = visit(document, {
       Directive: node =>
@@ -190,16 +191,14 @@ class Validator {
       throw this.error(
         `Field "${this.typeName}.${this.fieldName}" not found in typeDefs.`
       );
-
     if (this.isUnbatched) {
-      const intendedType2 = typeFromAST(
+      const intendedNamedType = typeFromAST(
         this.schema,
         intendedType as NamedTypeNode
       );
-
       if (
-        intendedType2 &&
-        !isTypeSubTypeOf(this.schema, returnType, intendedType2)
+        !intendedNamedType ||
+        !isTypeSubTypeOf(this.schema, returnType, intendedNamedType)
       ) {
         throw this.error(
           `Query does not return the intended type "${print(
@@ -209,32 +208,28 @@ class Validator {
           }". Returns "${returnType}".`
         );
       }
+      return null;
+    } else {
+      if (
+        unwrapTypeNode(intendedType).name.value !== unwrapType(returnType).name
+      )
+        throw this.error(
+          `Query does not return the intended entity type "${
+            unwrapTypeNode(intendedType).name.value
+          }" for "${this.typeName}.${this.fieldName}". Returns "${returnType}".`
+        );
+      const unwrappedReturnType = unwrapType(returnType);
+      if (
+        !isListType(
+          isNonNullType(returnType) ? returnType.ofType : returnType
+        ) ||
+        !isObjectType(unwrappedReturnType)
+      )
+        throw this.error(
+          `Query must return a list of objects but instead returns "${returnType}".`
+        );
+      return unwrappedReturnType;
     }
-
-    if (unwrapTypeNode(intendedType).name.value !== unwrapType(returnType).name)
-      throw this.error(
-        this.isUnbatched
-          ? `Query does not return the intended type "${print(
-              intendedType
-            )}" for "${this.typeName}.${
-              this.fieldName
-            }". Returns "${returnType}".`
-          : `Query does not return the intended entity type "${
-              unwrapTypeNode(intendedType).name.value
-            }" for "${this.typeName}.${
-              this.fieldName
-            }". Returns "${returnType}".`
-      );
-    if (this.isUnbatched) return null;
-    const unwrappedReturnType = unwrapType(returnType);
-    if (
-      !isListType(isNonNullType(returnType) ? returnType.ofType : returnType) ||
-      !isObjectType(unwrappedReturnType)
-    )
-      throw this.error(
-        `Query must return a list of objects but instead returns "${returnType}".`
-      );
-    return unwrappedReturnType;
   }
 
   private validateSelections() {
@@ -270,7 +265,7 @@ class Validator {
         );
       const childFieldName = selection.name.value;
       if (!this.childType)
-        throw this.error('Cannot find the child type in the schema.');
+        throw this.error('Cannot find the intended type in the schema.');
       const childFieldType = this.childType.getFields()[childFieldName]?.type;
       if (!childFieldType)
         throw this.error(

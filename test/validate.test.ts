@@ -535,4 +535,245 @@ describe('validateFieldConfig', () => {
       )
     ).not.toThrow();
   });
+
+  describe('unbatched queries', () => {
+    it('warns against using unbatched queries', () => {
+      const consoleSpy = spyOn(console, 'warn');
+      validateFieldConfig(
+        'getReviewsByProductId(productIds: [$upc]) @unbatched',
+        'Product',
+        'reviews',
+        typeDefs,
+        schema
+      );
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'graphql-join warning for resolver "Product.reviews": use of unbatched queries is not recommended as it results in the n+1 problem.'
+      );
+    });
+
+    it('accepts query with missing selection set when marked with @unbatched directive', () => {
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId(productIds: [$upc]) @unbatched',
+          'Product',
+          'reviews',
+          typeDefs,
+          schema
+        )
+      ).not.toThrow();
+    });
+
+    it('rejects query with both @unbatched directive and a selection set', () => {
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId(productIds: [$upc]) @unbatched { upc: productId }',
+          'Product',
+          'reviews',
+          typeDefs,
+          schema
+        )
+      ).toThrow(
+        'graphql-join config error for resolver "Product.reviews": Selection sets for unbatched queries are unnecessary.'
+      );
+    });
+
+    const scalarSchema = makeExecutableSchema({
+      typeDefs: `#graphql
+        type Query {
+          getReviewByProductId(productId: String!): String
+          getReviewsByProductId(productId: String!): [String]
+        }
+        type Product {
+          upc: String!
+          name: String
+          price: Int
+        }
+      `,
+    });
+
+    it('allows scalar and scalar list return types', () => {
+      const typeDefs = `#graphql
+        extend type Product {
+          review: String
+          reviews: [String]
+        }
+      `;
+      expect(() =>
+        validateFieldConfig(
+          'getReviewByProductId(productId: $upc) @unbatched',
+          'Product',
+          'review',
+          typeDefs,
+          scalarSchema
+        )
+      ).not.toThrow();
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId(productId: $upc) @unbatched',
+          'Product',
+          'reviews',
+          typeDefs,
+          scalarSchema
+        )
+      ).not.toThrow();
+    });
+
+    it('enforces that the unwrapped return type matches unwrapped expected type', () => {
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId(productId: $upc) @unbatched',
+          'Product',
+          'reviews',
+          typeDefs,
+          scalarSchema
+        )
+      ).toThrow(
+        'graphql-join config error for resolver "Product.reviews": ' +
+          'Query does not return the intended type "[Review!]!" for "Product.reviews". Returns "[String]".'
+      );
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId(productId: $upc) @unbatched',
+          'Product',
+          'reviews',
+          typeDefs,
+          schema
+        )
+      ).not.toThrow();
+    });
+
+    const schema = makeExecutableSchema({
+      typeDefs: `#graphql
+        type Query {
+          getReviewByProductId_NonNullable(productId: String!): Review!
+          getReviewsByProductId_Nullable(productIds: [String!]!): [Review]
+          getReviewsByProductId_NonNullable(productIds: [String!]!): [Review!]!
+        }
+        type Product {
+          upc: String!
+          name: String
+          price: Int
+        }
+        type Review {
+          id: Int!
+          body: String
+          productId: String!
+        }
+      `,
+    });
+
+    it('enforces that if expected type is singular, then return type must be singular', () => {
+      const typeDefs = `#graphql
+        extend type Product {
+          review: Review
+        }
+      `;
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId_NonNullable(productId: $upc) @unbatched',
+          'Product',
+          'review',
+          typeDefs,
+          schema
+        )
+      ).toThrow(
+        'graphql-join config error for resolver "Product.review": ' +
+          'Query does not return the intended type "Review" for "Product.review". Returns "[Review!]!".'
+      );
+      expect(() =>
+        validateFieldConfig(
+          'getReviewByProductId_NonNullable(productId: $upc) @unbatched',
+          'Product',
+          'review',
+          typeDefs,
+          schema
+        )
+      ).not.toThrow();
+    });
+
+    it('enforces that if expected type is a list, then return type must be a list', () => {
+      const typeDefs = `#graphql
+        extend type Product {
+          reviews: [Review]
+        }
+      `;
+      expect(() =>
+        validateFieldConfig(
+          'getReviewByProductId_NonNullable(productId: $upc) @unbatched',
+          'Product',
+          'reviews',
+          typeDefs,
+          schema
+        )
+      ).toThrow(
+        'graphql-join config error for resolver "Product.reviews": ' +
+          'Query does not return the intended type "[Review]" for "Product.reviews". Returns "Review!".'
+      );
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId_NonNullable(productId: $upc) @unbatched',
+          'Product',
+          'reviews',
+          typeDefs,
+          schema
+        )
+      ).not.toThrow();
+    });
+
+    it('enforces nullability coercion', () => {
+      const typeDefs = `#graphql
+        extend type Product {
+          reviews_Nullable_All: [Review!]
+          reviews_Nullable_Outer: [Review!]
+          reviews_Nullable_Inner: [Review]!
+          reviews_NonNullable: [Review!]!
+        }
+      `;
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId_Nullable(productId: $upc) @unbatched',
+          'Product',
+          'reviews_NonNullable',
+          typeDefs,
+          schema
+        )
+      ).toThrow(
+        'graphql-join config error for resolver "Product.reviews_NonNullable": ' +
+          'Query does not return the intended type "[Review!]!" for "Product.reviews_NonNullable". Returns "[Review]".'
+      );
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId_Nullable(productId: $upc) @unbatched',
+          'Product',
+          'reviews_Nullable_Outer',
+          typeDefs,
+          schema
+        )
+      ).toThrow(
+        'graphql-join config error for resolver "Product.reviews_Nullable_Outer": ' +
+          'Query does not return the intended type "[Review]!" for "Product.reviews_Nullable_Outer". Returns "[Review]".'
+      );
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId_Nullable(productId: $upc) @unbatched',
+          'Product',
+          'reviews_Nullable_Inner',
+          typeDefs,
+          schema
+        )
+      ).toThrow(
+        'graphql-join config error for resolver "Product.reviews_Nullable_Inner": ' +
+          'Query does not return the intended type "[Review!]" for "Product.reviews_Nullable_Inner". Returns "[Review]".'
+      );
+      expect(() =>
+        validateFieldConfig(
+          'getReviewByProductId_NonNullable(productId: $upc) @unbatched',
+          'Product',
+          'reviews_Nullable_All',
+          typeDefs,
+          schema
+        )
+      ).not.toThrow();
+    });
+  });
 });

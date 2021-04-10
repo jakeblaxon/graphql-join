@@ -25,8 +25,9 @@ import {
   printSchema,
   print,
   specifiedRules,
-  NoUnusedVariablesRule,
   ScalarLeafsRule,
+  typeFromAST,
+  isTypeSubTypeOf,
 } from 'graphql';
 
 export function validateFieldConfig(
@@ -156,9 +157,9 @@ class Validator {
       visit(this.document, {
         OperationDefinition: node => ({...node, variableDefinitions}),
       }),
-      specifiedRules
-        .filter(rule => rule !== NoUnusedVariablesRule)
-        .filter(rule => (this.isUnbatched ? rule !== ScalarLeafsRule : true))
+      specifiedRules.filter(rule =>
+        this.isUnbatched ? rule !== ScalarLeafsRule : true
+      )
     );
     if (errors.length > 0) throw this.error(errors[0].message);
   }
@@ -189,6 +190,26 @@ class Validator {
       throw this.error(
         `Field "${this.typeName}.${this.fieldName}" not found in typeDefs.`
       );
+
+    if (this.isUnbatched) {
+      const intendedType2 = typeFromAST(
+        this.schema,
+        intendedType as NamedTypeNode
+      );
+
+      if (
+        intendedType2 &&
+        !isTypeSubTypeOf(this.schema, returnType, intendedType2)
+      ) {
+        throw this.error(
+          `Query does not return the intended type "${print(
+            intendedType
+          )}" for "${this.typeName}.${
+            this.fieldName
+          }". Returns "${returnType}".`
+        );
+      }
+    }
 
     if (unwrapTypeNode(intendedType).name.value !== unwrapType(returnType).name)
       throw this.error(

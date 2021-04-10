@@ -711,7 +711,7 @@ describe('validateFieldConfig', () => {
       );
       expect(() =>
         validateFieldConfig(
-          'getReviewsByProductId_NonNullable(productId: $upc) @unbatched',
+          'getReviewsByProductId_NonNullable(productIds: [$upc]) @unbatched',
           'Product',
           'reviews',
           typeDefs,
@@ -751,7 +751,7 @@ describe('validateFieldConfig', () => {
         )
       ).toThrow(
         'graphql-join config error for resolver "Product.reviews_Nullable_Outer": ' +
-          'Query does not return the intended type "[Review]!" for "Product.reviews_Nullable_Outer". Returns "[Review]".'
+          'Query does not return the intended type "[Review!]" for "Product.reviews_Nullable_Outer". Returns "[Review]".'
       );
       expect(() =>
         validateFieldConfig(
@@ -763,11 +763,11 @@ describe('validateFieldConfig', () => {
         )
       ).toThrow(
         'graphql-join config error for resolver "Product.reviews_Nullable_Inner": ' +
-          'Query does not return the intended type "[Review!]" for "Product.reviews_Nullable_Inner". Returns "[Review]".'
+          'Query does not return the intended type "[Review]!" for "Product.reviews_Nullable_Inner". Returns "[Review]".'
       );
       expect(() =>
         validateFieldConfig(
-          'getReviewByProductId_NonNullable(productId: $upc) @unbatched',
+          'getReviewsByProductId_NonNullable(productIds: [$upc]) @unbatched',
           'Product',
           'reviews_Nullable_All',
           typeDefs,

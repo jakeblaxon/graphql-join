@@ -124,7 +124,7 @@ export function createParentSelectionSet(queryFieldNode: FieldNode) {
       parent && fields.add(node.alias?.value || node.name.value);
     },
   });
-  return `{ ${Array.from(fields).join(' ')} }`;
+  return fields.size > 0 ? `{ ${Array.from(fields).join(' ')} }` : undefined;
 }
 
 export function createChildSelectionSet(

@@ -19,6 +19,15 @@ function getQueryFieldNode(joinQuery: string) {
 }
 
 describe('createParentSelectionSet', () => {
+  it('returns undefined if parent selection set is empty', () => {
+    const result = createParentSelectionSet(
+      getQueryFieldNode(`#graphql
+        books @unbatched
+      `)
+    );
+    expect(result).toBeUndefined();
+  });
+
   it('selects all selection fields', () => {
     const result = createParentSelectionSet(
       getQueryFieldNode(`#graphql

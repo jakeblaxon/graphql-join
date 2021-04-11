@@ -166,7 +166,7 @@ describe('createArgsFromKeysFunction', () => {
     });
   });
 
-  it('replaces each variable with a unique non-null list of its corresponding field in the parent', () => {
+  it('replaces each variable with a unique non-null list of its corresponding field in the parent, when batched is true', () => {
     const result = createArgsFromKeysFunction(
       getQueryFieldNode(`#graphql
         books(titles: $title)  {
@@ -190,6 +190,17 @@ describe('createArgsFromKeysFunction', () => {
       {title: undefined},
     ];
     expect(result(parentsList)).toEqual({titles: ['title 1', 'title 2', '']});
+  });
+
+  it('replaces each variable with the value of its corresponding field in the parent, when batched is false', () => {
+    const result = createArgsFromKeysFunction(
+      getQueryFieldNode(`#graphql
+        books(title: $title) @unbatched
+      `),
+      false
+    );
+    const parent = {title: 'title 1'};
+    expect(result([parent])).toEqual({title: 'title 1'});
   });
 
   it('handles variables in lists properly', () => {

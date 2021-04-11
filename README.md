@@ -2,7 +2,7 @@
 
 Join types together in your schema purely with SDL. Let GraphQL-Join handle the rest.
 
-*Warning*: This library is new and still evolving. Breaking changes will occur. Use it at your own risk.
+> :warning: This library is new and still evolving. Breaking changes will occur. Use it at your own risk.
 
 ## Getting Started
 
@@ -152,6 +152,22 @@ You can also add a symmetrical relation to your config like the following:
 Note that in this case we have to call a new query `getBooksByAuthorIds` because we don't have access to book ids in `Author`.
 
 As a final note, if you are going to join on a list, then the list can only contain scalar values, and you can only use this one field to join on. GraphQL-Join will not let you use more than one selection if the selection is a list type. This is because it's unclear how to match in this case, as there are multiple options that lead to different results.
+
+## Unbatched Queries
+
+GraphQL-Join supports batched queries by default, but in certain cases it may not be possible to join with a batched query because the parent and child don't share any common key fields to join on. In this situation, you can make "unbatched" queries (one query per parent) to join parents to children. To specify this, simply replace the selection set with an `@unbatched` directive on the query:
+
+```js
+resolvers: {
+  Book: {
+    author: `getAuthor(id: $authorId) @unbatched`
+  }
+}
+```
+
+The `$authorId` parameter will be set to whatever value the `parent.authorId` is, because there is only one parent in this case. There is no selection set here because the `Book.author` field will be set to whatever the unbatched query returns, therefore making a key mapping unnecessary.
+
+> :warning: Unbatched queries should be avoided if at all possible because they result in the n+1 problem. Each parent object will make its own network call, potentially congesting the network and increasing delay times.
 
 ## Benefits
 

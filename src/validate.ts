@@ -23,6 +23,11 @@ import {
   isNonNullType,
   buildSchema,
   printSchema,
+  print,
+  specifiedRules,
+  ScalarLeafsRule,
+  typeFromAST,
+  isTypeSubTypeOf,
 } from 'graphql';
 
 export function validateFieldConfig(
@@ -32,208 +37,274 @@ export function validateFieldConfig(
   typeDefs: string,
   schema: GraphQLSchema
 ) {
-  class ValidationError extends Error {
-    constructor(message: string) {
-      super(
-        `graphql-join config error for resolver "${typeName}.${fieldName}": ${message}`
+  return new Validator(
+    fieldConfig,
+    typeName,
+    fieldName,
+    typeDefs,
+    schema
+  ).getValidationInfo();
+}
+
+class Validator {
+  private document: DocumentNode;
+  private operationDefinition: OperationDefinitionNode;
+  private queryFieldNode: FieldNode;
+  private typeNode: ObjectTypeDefinitionNode;
+  private childType: GraphQLObjectType | null;
+  private isUnbatched: boolean;
+
+  constructor(
+    private fieldConfig: string,
+    private typeName: string,
+    private fieldName: string,
+    private typeDefs: string,
+    private schema: GraphQLSchema
+  ) {
+    // rebuild schema, as its ast nodes may be undefined
+    this.schema = buildSchema(printSchema(schema));
+
+    let document: DocumentNode;
+    try {
+      document = parse(`{${fieldConfig}}`);
+    } catch (e) {
+      throw this.error(e);
+    }
+
+    this.isUnbatched = false;
+    this.document = visit(document, {
+      Directive: node =>
+        node.name.value === 'unbatched'
+          ? (this.isUnbatched = true) && null
+          : undefined,
+    });
+    if (this.isUnbatched)
+      this.warn(
+        'Use of unbatched queries is not recommended as it results in the n+1 problem.'
       );
+
+    const operationDefinition = this.document.definitions[0];
+    if (operationDefinition?.kind !== Kind.OPERATION_DEFINITION)
+      throw this.error('Unable to find operation definition for query.');
+    if (operationDefinition.selectionSet.selections.length > 1)
+      throw this.error('Multiple queries or fragments are not allowed.');
+    this.operationDefinition = operationDefinition;
+
+    const queryFieldNode = operationDefinition.selectionSet.selections[0];
+    if (queryFieldNode?.kind !== Kind.FIELD)
+      throw this.error('Query type must be a field node.');
+    this.queryFieldNode = queryFieldNode;
+
+    const typeNode = this.schema.getType(typeName)?.astNode;
+    if (typeNode?.kind !== Kind.OBJECT_TYPE_DEFINITION)
+      throw this.error(`Type "${typeName}" must be an object type.`);
+    this.typeNode = typeNode;
+
+    this.validateArguments();
+    this.childType = this.validateReturnType();
+    this.validateSelections();
+  }
+
+  getValidationInfo() {
+    return {queryFieldNode: this.queryFieldNode, isUnbatched: this.isUnbatched};
+  }
+
+  private validateArguments() {
+    const variableNames = new Set<string>();
+    visit(this.operationDefinition, {
+      Variable: node => {
+        variableNames.add(node.name.value);
+      },
+    });
+    const variableDefinitions = Array.from(variableNames).map(variableName => {
+      const fieldNode = this.typeNode.fields?.find(
+        field => field.name.value === variableName
+      );
+      if (!fieldNode)
+        throw this.error(
+          `Field corresponding to "$${variableName}" not found in type "${this.typeNode.name.value}".`
+        );
+      return {
+        kind: Kind.VARIABLE_DEFINITION,
+        variable: {
+          kind: Kind.VARIABLE,
+          name: {
+            kind: Kind.NAME,
+            value: variableName,
+          },
+        },
+        type: this.isUnbatched
+          ? fieldNode.type
+          : {
+              kind: Kind.NON_NULL_TYPE,
+              type: {
+                kind: Kind.LIST_TYPE,
+                type: {
+                  kind: Kind.NON_NULL_TYPE,
+                  type: {
+                    kind: Kind.NAMED_TYPE,
+                    name: {
+                      kind: Kind.NAME,
+                      value: unwrapTypeNode(fieldNode.type).name.value,
+                    },
+                  },
+                },
+              },
+            },
+      };
+    });
+    const errors = validate(
+      this.schema,
+      visit(this.document, {
+        OperationDefinition: node => ({...node, variableDefinitions}),
+      }),
+      specifiedRules.filter(rule =>
+        this.isUnbatched ? rule !== ScalarLeafsRule : true
+      )
+    );
+    if (errors.length > 0) throw this.error(errors[0].message);
+  }
+
+  private validateReturnType() {
+    const returnType = this.schema.getQueryType()?.getFields()[
+      this.queryFieldNode.name.value
+    ]?.type;
+    if (!returnType) throw this.error('Could not find return type for query.');
+    let typeDefsDocument;
+    try {
+      typeDefsDocument = parse(this.typeDefs);
+    } catch (e) {
+      throw this.error(`typeDefs is invalid: ${e}`);
+    }
+    let intendedType: TypeNode | undefined;
+    visit(typeDefsDocument, {
+      ObjectTypeDefinition: node =>
+        node.name.value === this.typeName ? node : false,
+      ObjectTypeExtension: node =>
+        node.name.value === this.typeName ? node : false,
+      FieldDefinition: node =>
+        node.name.value === this.fieldName
+          ? (intendedType = node.type)
+          : undefined,
+    });
+    if (!intendedType)
+      throw this.error(
+        `Field "${this.typeName}.${this.fieldName}" not found in typeDefs.`
+      );
+    if (this.isUnbatched) {
+      const intendedNamedType = typeFromAST(
+        this.schema,
+        intendedType as NamedTypeNode
+      );
+      if (
+        !intendedNamedType ||
+        !isTypeSubTypeOf(this.schema, returnType, intendedNamedType)
+      ) {
+        throw this.error(
+          `Query does not return the intended type "${print(
+            intendedType
+          )}" for "${this.typeName}.${
+            this.fieldName
+          }". Returns "${returnType}".`
+        );
+      }
+      return null;
+    } else {
+      if (
+        unwrapTypeNode(intendedType).name.value !== unwrapType(returnType).name
+      )
+        throw this.error(
+          `Query does not return the intended entity type "${
+            unwrapTypeNode(intendedType).name.value
+          }" for "${this.typeName}.${this.fieldName}". Returns "${returnType}".`
+        );
+      const unwrappedReturnType = unwrapType(returnType);
+      if (
+        !isListType(
+          isNonNullType(returnType) ? returnType.ofType : returnType
+        ) ||
+        !isObjectType(unwrappedReturnType)
+      )
+        throw this.error(
+          `Query must return a list of objects but instead returns "${returnType}".`
+        );
+      return unwrappedReturnType;
     }
   }
 
-  // rebuild schema, as its ast nodes may be undefined
-  schema = buildSchema(printSchema(schema));
-
-  let document: DocumentNode;
-  try {
-    document = parse(`{${fieldConfig}}`);
-  } catch (e) {
-    throw new ValidationError(e);
+  private validateSelections() {
+    const selections = this.queryFieldNode.selectionSet?.selections;
+    if (this.isUnbatched) {
+      if (selections?.length)
+        throw this.error(
+          'Selection sets for unbatched queries are unnecessary.'
+        );
+      return;
+    }
+    if (!selections) throw this.error('Query must have a selection set.');
+    selections.forEach(selection => {
+      if (selection.kind !== Kind.FIELD)
+        throw this.error('Fragments are not allowed in query.');
+      const parentFieldName = selection.alias?.value || selection.name.value;
+      const parentFieldNode = this.typeNode.fields?.find(
+        field => field.name.value === parentFieldName
+      );
+      if (!parentFieldNode)
+        throw this.error(
+          `Field corresponding to "${parentFieldName}" in selection set not found in type "${
+            this.typeNode.name.value
+          }". ${
+            selection.alias
+              ? 'Make sure the alias is correctly spelled.'
+              : 'Use an alias to map the child field to the corresponding parent field.'
+          }`
+        );
+      if (parentFieldNode.type.kind === Kind.LIST_TYPE && selections.length > 1)
+        throw this.error(
+          `Only one selection field is allowed when joining on a list type like "${this.typeNode.name.value}.${parentFieldName}".`
+        );
+      const childFieldName = selection.name.value;
+      if (!this.childType)
+        throw this.error('Cannot find the intended type in the schema.');
+      const childFieldType = this.childType.getFields()[childFieldName]?.type;
+      if (!childFieldType)
+        throw this.error(
+          `Could not find type definition for "${this.childType.name}.${childFieldName}".`
+        );
+      if (isListType(childFieldType) && selections.length > 1)
+        throw this.error(
+          `Only one selection field is allowed when joining on a list type like "${this.childType.name}.${childFieldName}".`
+        );
+      if (!isScalarType(unwrapType(childFieldType)))
+        throw this.error(
+          `Cannot join on key "${this.childType.name}.${childFieldName}". Join keys must be scalars or scalar lists.`
+        );
+      if (
+        unwrapType(childFieldType).name !==
+        unwrapTypeNode(parentFieldNode.type).name.value
+      )
+        throw this.error(
+          `Cannot join on keys "${
+            this.typeNode.name.value
+          }.${parentFieldName}" and "${
+            this.childType.name
+          }.${childFieldName}". They are different types: "${
+            unwrapTypeNode(parentFieldNode.type).name.value
+          }" and "${unwrapType(childFieldType).name}".`
+        );
+    });
   }
-  const operationDefinition = document.definitions[0];
-  if (operationDefinition?.kind !== Kind.OPERATION_DEFINITION)
-    throw new ValidationError('Unable to find operation definition for query.');
-  if (operationDefinition.selectionSet.selections.length > 1)
-    throw new ValidationError('Multiple queries or fragments are not allowed.');
-  const queryFieldNode = operationDefinition.selectionSet.selections[0];
-  if (queryFieldNode?.kind !== Kind.FIELD)
-    throw new ValidationError('Query type must be a field node.');
-  const typeNode = schema.getType(typeName)?.astNode;
-  if (typeNode?.kind !== Kind.OBJECT_TYPE_DEFINITION)
-    throw new ValidationError(`Type "${typeName}" must be an object type.`);
 
-  try {
-    validateArguments(operationDefinition, typeNode, document, schema);
-    const childType = validateReturnType(
-      queryFieldNode,
-      typeName,
-      fieldName,
-      typeDefs,
-      schema
+  private warn(message: string) {
+    console.warn(
+      `graphql-join warning for resolver "${this.typeName}.${this.fieldName}": ${message}`
     );
-    validateSelections(queryFieldNode, typeNode, childType);
-  } catch (e) {
-    throw new ValidationError(e.message);
   }
-
-  return queryFieldNode;
-}
-
-function validateArguments(
-  operationDefinition: OperationDefinitionNode,
-  typeNode: ObjectTypeDefinitionNode,
-  document: DocumentNode,
-  schema: GraphQLSchema
-) {
-  const variableNames = new Set<string>();
-  visit(operationDefinition, {
-    Variable: node => {
-      variableNames.add(node.name.value);
-    },
-  });
-  const variableDefinitions = Array.from(variableNames).map(variableName => {
-    const fieldNode = typeNode.fields?.find(
-      field => field.name.value === variableName
+  private error(message: string) {
+    return new Error(
+      `graphql-join config error for resolver "${this.typeName}.${this.fieldName}": ${message}`
     );
-    if (!fieldNode)
-      throw Error(
-        `Field corresponding to "$${variableName}" not found in type "${typeNode.name.value}".`
-      );
-    return {
-      kind: Kind.VARIABLE_DEFINITION,
-      variable: {
-        kind: Kind.VARIABLE,
-        name: {
-          kind: Kind.NAME,
-          value: variableName,
-        },
-      },
-      type: {
-        kind: Kind.NON_NULL_TYPE,
-        type: {
-          kind: Kind.LIST_TYPE,
-          type: {
-            kind: Kind.NON_NULL_TYPE,
-            type: {
-              kind: Kind.NAMED_TYPE,
-              name: {
-                kind: Kind.NAME,
-                value: unwrapTypeNode(fieldNode.type).name.value,
-              },
-            },
-          },
-        },
-      },
-    };
-  });
-  const errors = validate(schema, {
-    ...document,
-    definitions: [
-      {
-        ...operationDefinition,
-        variableDefinitions,
-      },
-    ],
-  });
-  if (errors.length > 0) throw new Error(errors[0].message);
-}
-
-function validateReturnType(
-  queryFieldNode: FieldNode,
-  typeName: string,
-  fieldName: string,
-  typeDefs: string,
-  schema: GraphQLSchema
-) {
-  const returnType = schema.getQueryType()?.getFields()[
-    queryFieldNode.name.value
-  ]?.type;
-  if (!returnType) throw Error('Could not find return type for query.');
-  const unwrappedReturnType = unwrapType(returnType);
-  if (
-    !isListType(isNonNullType(returnType) ? returnType.ofType : returnType) ||
-    !isObjectType(unwrappedReturnType)
-  )
-    throw Error(
-      `Query must return a list of objects but instead returns "${returnType}".`
-    );
-  let typeDefsDocument;
-  try {
-    typeDefsDocument = parse(typeDefs);
-  } catch (e) {
-    throw Error(`typeDefs is invalid: ${e}`);
   }
-  let intendedType;
-  visit(typeDefsDocument, {
-    ObjectTypeDefinition: node => (node.name.value === typeName ? node : false),
-    ObjectTypeExtension: node => (node.name.value === typeName ? node : false),
-    FieldDefinition: node =>
-      node.name.value === fieldName ? (intendedType = node.type) : undefined,
-  });
-  if (!intendedType)
-    throw Error(`Field "${typeName}.${fieldName}" not found in typeDefs.`);
-  if (unwrapTypeNode(intendedType).name.value !== unwrappedReturnType.name)
-    throw Error(
-      `Query does not return the intended entity type "${
-        unwrapTypeNode(intendedType).name.value
-      }" for "${typeName}.${fieldName}". Returns "${returnType}".`
-    );
-  return unwrappedReturnType;
-}
-
-function validateSelections(
-  queryFieldNode: FieldNode,
-  typeNode: ObjectTypeDefinitionNode,
-  childType: GraphQLObjectType
-) {
-  const selections = queryFieldNode.selectionSet?.selections;
-  if (!selections) throw Error('Query must have a selection set.');
-  selections.forEach(selection => {
-    if (selection.kind !== Kind.FIELD)
-      throw Error('Fragments are not allowed in query.');
-    const parentFieldName = selection.alias?.value || selection.name.value;
-    const parentFieldNode = typeNode.fields?.find(
-      field => field.name.value === parentFieldName
-    );
-    if (!parentFieldNode)
-      throw Error(
-        `Field corresponding to "${parentFieldName}" in selection set not found in type "${
-          typeNode.name.value
-        }". ${
-          selection.alias
-            ? 'Make sure the alias is correctly spelled.'
-            : 'Use an alias to map the child field to the corresponding parent field.'
-        }`
-      );
-    if (parentFieldNode.type.kind === Kind.LIST_TYPE && selections.length > 1)
-      throw Error(
-        `Only one selection field is allowed when joining on a list type like "${typeNode.name.value}.${parentFieldName}".`
-      );
-    const childFieldName = selection.name.value;
-    const childFieldType = childType.getFields()[childFieldName]?.type;
-    if (!childFieldType)
-      throw Error(
-        `Could not find type definition for "${childType.name}.${childFieldName}".`
-      );
-    if (isListType(childFieldType) && selections.length > 1)
-      throw Error(
-        `Only one selection field is allowed when joining on a list type like "${childType.name}.${childFieldName}".`
-      );
-    if (!isScalarType(unwrapType(childFieldType)))
-      throw Error(
-        `Cannot join on key "${childType.name}.${childFieldName}". Join keys must be scalars or scalar lists.`
-      );
-    if (
-      unwrapType(childFieldType).name !==
-      unwrapTypeNode(parentFieldNode.type).name.value
-    )
-      throw Error(
-        `Cannot join on keys "${typeNode.name.value}.${parentFieldName}" and "${
-          childType.name
-        }.${childFieldName}". They are different types: "${
-          unwrapTypeNode(parentFieldNode.type).name.value
-        }" and "${unwrapType(childFieldType).name}".`
-      );
-  });
 }
 
 function unwrapTypeNode(type: TypeNode): NamedTypeNode {

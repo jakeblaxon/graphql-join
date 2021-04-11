@@ -84,7 +84,8 @@ describe('createArgsFromKeysFunction', () => {
     const result = createArgsFromKeysFunction(
       getQueryFieldNode(`#graphql
         books { title }
-      `)
+      `),
+      true
     );
     expect(result([])).toEqual({});
   });
@@ -95,7 +96,8 @@ describe('createArgsFromKeysFunction', () => {
         books(where: {author: [{first: "William"}, {last: "Shakespeare"}]})  {
           title
         }
-      `)
+      `),
+      true
     );
     expect(result([])).toEqual({
       where: {author: [{first: 'William'}, {last: 'Shakespeare'}]},
@@ -133,7 +135,8 @@ describe('createArgsFromKeysFunction', () => {
         ) {
           title
         }
-      `)
+      `),
+      true
     );
     expect(result([])).toEqual({
       int: 1,
@@ -163,13 +166,14 @@ describe('createArgsFromKeysFunction', () => {
     });
   });
 
-  it('replaces each variable with a unique non-null list of its corresponding field in the parent', () => {
+  it('replaces each variable with a unique non-null list of its corresponding field in the parent, when batched is true', () => {
     const result = createArgsFromKeysFunction(
       getQueryFieldNode(`#graphql
         books(titles: $title)  {
           title
         }
-      `)
+      `),
+      true
     );
     const parentsScalar = [
       {title: 'title 1'},
@@ -188,13 +192,25 @@ describe('createArgsFromKeysFunction', () => {
     expect(result(parentsList)).toEqual({titles: ['title 1', 'title 2', '']});
   });
 
+  it('replaces each variable with the value of its corresponding field in the parent, when batched is false', () => {
+    const result = createArgsFromKeysFunction(
+      getQueryFieldNode(`#graphql
+        books(title: $title) @unbatched
+      `),
+      false
+    );
+    const parent = {title: 'title 1'};
+    expect(result([parent])).toEqual({title: 'title 1'});
+  });
+
   it('handles variables in lists properly', () => {
     const result = createArgsFromKeysFunction(
       getQueryFieldNode(`#graphql
         books(where: [$title, $author])  {
           title
         }
-      `)
+      `),
+      true
     );
     const parents = [
       {title: 'title 1', author: 'author 1'},
@@ -211,7 +227,8 @@ describe('createArgsFromKeysFunction', () => {
         books(where: {title: $title})  {
           title
         }
-      `)
+      `),
+      true
     );
     const parents = [{title: 'title 1'}];
     expect(result(parents)).toEqual({
@@ -427,6 +444,7 @@ describe('GraphQLJoinTransform', () => {
   const typeDefs = `#graphql
     type Query {
       getProductsById(ids: [String!]!): [Product!]!
+      getProductById(id: String!): Product
       getReviewsById(ids: [String!]!): [Review]
       getReviewsByProductId(productIds: [String!]!): [Review!]!
     }
@@ -449,6 +467,7 @@ describe('GraphQLJoinTransform', () => {
     }
     extend type Review {
       product: Product!
+      productUnbatched: Product
     }
   `;
 
@@ -456,6 +475,9 @@ describe('GraphQLJoinTransform', () => {
     Query: {
       getProductsById(parent: unknown, args: {ids: string[]}) {
         return products.filter(product => args.ids.includes(product.upc));
+      },
+      getProductById(parent: unknown, args: {id: string}) {
+        return products.find(product => args.id === product.upc);
       },
       getReviewsById(parent: unknown, args: {ids: string[]}) {
         return reviews.filter(review => args.ids.includes(review.id));
@@ -522,6 +544,7 @@ describe('GraphQLJoinTransform', () => {
     resolvers: {
       Review: {
         product: 'getProductsById(ids: $productId) { productId: upc }',
+        productUnbatched: 'getProductById(id: $productId) @unbatched',
       },
       Product: {
         reviews: 'getReviewsByProductId(productIds: $upc) { upc: productId }',
@@ -539,6 +562,9 @@ describe('GraphQLJoinTransform', () => {
             getProductsById() {
               throw Error('error in getProductsById');
             },
+            getProductById() {
+              throw Error('error in getProductById');
+            },
           },
         },
       }),
@@ -554,6 +580,17 @@ describe('GraphQLJoinTransform', () => {
       message: 'error in getProductsById',
       locations: [],
       path: ['getReviewsById', 0, 'product'],
+    });
+    const resultUnbatched = await execute(
+      wrappedSchema,
+      parse(
+        '{ getReviewsById(ids: ["1", "2", "3", "4"]) { id productUnbatched { name } } }'
+      )
+    );
+    expect(resultUnbatched.errors?.[0]).toEqual({
+      message: 'error in getProductById',
+      locations: [],
+      path: ['getReviewsById', 0, 'productUnbatched'],
     });
   });
 
@@ -815,6 +852,88 @@ describe('GraphQLJoinTransform', () => {
                 {
                   id: '4',
                   body: 'Prefer something else.',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    const resultUnbatched = await execute(
+      wrappedSchema,
+      parse(`#graphql
+        {
+          getReviewsById(ids: ["1", "2", "3", "4"]) {
+            id
+            productUnbatched {
+              name
+              reviews {
+                id
+                productUnbatched {
+                  price
+                }
+              }
+            }
+          }
+        }
+      `)
+    );
+    expect(resultUnbatched).toEqual({
+      data: {
+        getReviewsById: [
+          {
+            id: '1',
+            productUnbatched: {
+              name: 'Table',
+              reviews: [
+                {
+                  id: '1',
+                  productUnbatched: {price: 899},
+                },
+                {
+                  id: '4',
+                  productUnbatched: {price: 899},
+                },
+              ],
+            },
+          },
+          {
+            id: '2',
+            productUnbatched: {
+              name: 'Couch',
+              reviews: [
+                {
+                  id: '2',
+                  productUnbatched: {price: 1299},
+                },
+              ],
+            },
+          },
+          {
+            id: '3',
+            productUnbatched: {
+              name: 'Chair',
+              reviews: [
+                {
+                  id: '3',
+                  productUnbatched: {price: 54},
+                },
+              ],
+            },
+          },
+          {
+            id: '4',
+            productUnbatched: {
+              name: 'Table',
+              reviews: [
+                {
+                  id: '1',
+                  productUnbatched: {price: 899},
+                },
+                {
+                  id: '4',
+                  productUnbatched: {price: 899},
                 },
               ],
             },

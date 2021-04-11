@@ -7,7 +7,7 @@ import {
   visit,
 } from 'graphql';
 import {batchDelegateToSchema} from '@graphql-tools/batch-delegate';
-import {Transform} from '@graphql-tools/delegate';
+import {delegateToSchema, Transform} from '@graphql-tools/delegate';
 import {stitchSchemas} from '@graphql-tools/stitch';
 import {IResolvers} from '@graphql-tools/utils';
 import {WrapQuery} from '@graphql-tools/wrap';
@@ -39,27 +39,46 @@ export default class GraphQLJoinTransform implements Transform {
       typeDefs: this.config.typeDefs,
       resolvers: _.mapValues(this.config.resolvers, (typeConfig, typeName) =>
         _.mapValues(typeConfig, (fieldConfig, fieldName) => {
-          return createFieldResolver(
-            validateFieldConfig(
-              fieldConfig,
-              typeName,
-              fieldName,
-              this.config.typeDefs,
-              originalSchema
-            ),
+          const {queryFieldNode, isUnbatched} = validateFieldConfig(
+            fieldConfig,
+            typeName,
+            fieldName,
+            this.config.typeDefs,
             originalSchema
           );
+          return isUnbatched
+            ? createUnbatchedFieldResolver(queryFieldNode, originalSchema)
+            : createBatchedFieldResolver(queryFieldNode, originalSchema);
         })
       ),
     });
   }
 }
 
-export function createFieldResolver(
+export function createUnbatchedFieldResolver(
   queryFieldNode: FieldNode,
   schema: GraphQLSchema
 ) {
-  const argsFromKeys = createArgsFromKeysFunction(queryFieldNode);
+  const argsFunction = createArgsFromKeysFunction(queryFieldNode, false);
+  return {
+    selectionSet: createParentSelectionSet(queryFieldNode),
+    resolve: (parent, args, context, info) =>
+      delegateToSchema({
+        schema,
+        operation: 'query',
+        fieldName: queryFieldNode.name.value,
+        context,
+        info,
+        args: argsFunction([parent]),
+      }),
+  } as IResolvers;
+}
+
+export function createBatchedFieldResolver(
+  queryFieldNode: FieldNode,
+  schema: GraphQLSchema
+) {
+  const argsFromKeys = createArgsFromKeysFunction(queryFieldNode, true);
   const childSelectionSetTransform = new WrapQuery(
     [queryFieldNode.name.value],
     selectionSet => ({
@@ -116,7 +135,10 @@ export function createChildSelectionSet(
   }).selectionSet.selections;
 }
 
-export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
+export function createArgsFromKeysFunction(
+  queryFieldNode: FieldNode,
+  batched: boolean
+) {
   const scalarSymbol = Symbol('Scalar');
   const getValue = (node: {value: {kind: unknown; value?: unknown}}) =>
     node.value.kind === scalarSymbol ? node.value.value : node.value;
@@ -137,11 +159,13 @@ export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
             .mapValues(getValue)
             .value(),
         Variable: node =>
-          _(parents)
-            .flatMap(parent => _.get(parent, node.name.value))
-            .filter(elt => elt !== null && elt !== undefined)
-            .uniq()
-            .value(),
+          batched
+            ? _(parents)
+                .flatMap(parent => _.get(parent, node.name.value))
+                .filter(elt => elt !== null && elt !== undefined)
+                .uniq()
+                .value()
+            : _.get(parents[0], node.name.value),
       },
     }).arguments;
     return _.merge({}, ...args);

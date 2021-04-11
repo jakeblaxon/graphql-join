@@ -43,7 +43,7 @@ export function validateFieldConfig(
     fieldName,
     typeDefs,
     schema
-  ).validate();
+  ).getValidationInfo();
 }
 
 class Validator {
@@ -105,8 +105,8 @@ class Validator {
     this.validateSelections();
   }
 
-  validate() {
-    return this.queryFieldNode;
+  getValidationInfo() {
+    return {queryFieldNode: this.queryFieldNode, isUnbatched: this.isUnbatched};
   }
 
   private validateArguments() {

@@ -7,7 +7,7 @@ import {
   visit,
 } from 'graphql';
 import {batchDelegateToSchema} from '@graphql-tools/batch-delegate';
-import {Transform} from '@graphql-tools/delegate';
+import {delegateToSchema, Transform} from '@graphql-tools/delegate';
 import {stitchSchemas} from '@graphql-tools/stitch';
 import {IResolvers} from '@graphql-tools/utils';
 import {WrapQuery} from '@graphql-tools/wrap';
@@ -39,23 +39,40 @@ export default class GraphQLJoinTransform implements Transform {
       typeDefs: this.config.typeDefs,
       resolvers: _.mapValues(this.config.resolvers, (typeConfig, typeName) =>
         _.mapValues(typeConfig, (fieldConfig, fieldName) => {
-          return createFieldResolver(
-            validateFieldConfig(
-              fieldConfig,
-              typeName,
-              fieldName,
-              this.config.typeDefs,
-              originalSchema
-            ),
+          const {queryFieldNode, isUnbatched} = validateFieldConfig(
+            fieldConfig,
+            typeName,
+            fieldName,
+            this.config.typeDefs,
             originalSchema
           );
+          return isUnbatched
+            ? createUnBatchedFieldResolver(queryFieldNode, originalSchema)
+            : createBatchedFieldResolver(queryFieldNode, originalSchema);
         })
       ),
     });
   }
 }
 
-export function createFieldResolver(
+export function createUnBatchedFieldResolver(
+  queryFieldNode: FieldNode,
+  schema: GraphQLSchema
+) {
+  return {
+    selectionSet: createParentSelectionSet(queryFieldNode),
+    resolve: (parent, args, context, info) =>
+      delegateToSchema({
+        schema,
+        operation: 'query',
+        fieldName: queryFieldNode.name.value,
+        context,
+        info,
+      }),
+  } as IResolvers;
+}
+
+export function createBatchedFieldResolver(
   queryFieldNode: FieldNode,
   schema: GraphQLSchema
 ) {

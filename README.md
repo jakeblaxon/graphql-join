@@ -1,6 +1,6 @@
 # GraphQL-Join
 
-Join types together in your schema purely with SDL. Let GraphQL-Join handle the rest.
+Join types together in your schema declaratively with SDL.
 
 > :warning: This library is new and still evolving. Breaking changes will occur. Use it at your own risk.
 

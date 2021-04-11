@@ -476,8 +476,8 @@ describe('GraphQLJoinTransform', () => {
       getProductsById(parent: unknown, args: {ids: string[]}) {
         return products.filter(product => args.ids.includes(product.upc));
       },
-      getProductById(parent: unknown, args: {ids: string[]}) {
-        return products.find(product => args.ids.includes(product.upc));
+      getProductById(parent: unknown, args: {id: string}) {
+        return products.find(product => args.id === product.upc);
       },
       getReviewsById(parent: unknown, args: {ids: string[]}) {
         return reviews.filter(review => args.ids.includes(review.id));
@@ -852,6 +852,88 @@ describe('GraphQLJoinTransform', () => {
                 {
                   id: '4',
                   body: 'Prefer something else.',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    const resultUnbatched = await execute(
+      wrappedSchema,
+      parse(`#graphql
+        {
+          getReviewsById(ids: ["1", "2", "3", "4"]) {
+            id
+            productUnbatched {
+              name
+              reviews {
+                id
+                productUnbatched {
+                  price
+                }
+              }
+            }
+          }
+        }
+      `)
+    );
+    expect(resultUnbatched).toEqual({
+      data: {
+        getReviewsById: [
+          {
+            id: '1',
+            productUnbatched: {
+              name: 'Table',
+              reviews: [
+                {
+                  id: '1',
+                  productUnbatched: {price: 899},
+                },
+                {
+                  id: '4',
+                  productUnbatched: {price: 899},
+                },
+              ],
+            },
+          },
+          {
+            id: '2',
+            productUnbatched: {
+              name: 'Couch',
+              reviews: [
+                {
+                  id: '2',
+                  productUnbatched: {price: 1299},
+                },
+              ],
+            },
+          },
+          {
+            id: '3',
+            productUnbatched: {
+              name: 'Chair',
+              reviews: [
+                {
+                  id: '3',
+                  productUnbatched: {price: 54},
+                },
+              ],
+            },
+          },
+          {
+            id: '4',
+            productUnbatched: {
+              name: 'Table',
+              reviews: [
+                {
+                  id: '1',
+                  productUnbatched: {price: 899},
+                },
+                {
+                  id: '4',
+                  productUnbatched: {price: 899},
                 },
               ],
             },

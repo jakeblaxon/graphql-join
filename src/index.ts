@@ -47,7 +47,7 @@ export default class GraphQLJoinTransform implements Transform {
             originalSchema
           );
           return isUnbatched
-            ? createUnBatchedFieldResolver(queryFieldNode, originalSchema)
+            ? createUnbatchedFieldResolver(queryFieldNode, originalSchema)
             : createBatchedFieldResolver(queryFieldNode, originalSchema);
         })
       ),
@@ -55,10 +55,11 @@ export default class GraphQLJoinTransform implements Transform {
   }
 }
 
-export function createUnBatchedFieldResolver(
+export function createUnbatchedFieldResolver(
   queryFieldNode: FieldNode,
   schema: GraphQLSchema
 ) {
+  const argsFunction = createArgsFromKeysFunction(queryFieldNode, false);
   return {
     selectionSet: createParentSelectionSet(queryFieldNode),
     resolve: (parent, args, context, info) =>
@@ -68,6 +69,7 @@ export function createUnBatchedFieldResolver(
         fieldName: queryFieldNode.name.value,
         context,
         info,
+        args: argsFunction([parent]),
       }),
   } as IResolvers;
 }
@@ -76,7 +78,7 @@ export function createBatchedFieldResolver(
   queryFieldNode: FieldNode,
   schema: GraphQLSchema
 ) {
-  const argsFromKeys = createArgsFromKeysFunction(queryFieldNode);
+  const argsFromKeys = createArgsFromKeysFunction(queryFieldNode, true);
   const childSelectionSetTransform = new WrapQuery(
     [queryFieldNode.name.value],
     selectionSet => ({
@@ -133,7 +135,10 @@ export function createChildSelectionSet(
   }).selectionSet.selections;
 }
 
-export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
+export function createArgsFromKeysFunction(
+  queryFieldNode: FieldNode,
+  batched: boolean
+) {
   const scalarSymbol = Symbol('Scalar');
   const getValue = (node: {value: {kind: unknown; value?: unknown}}) =>
     node.value.kind === scalarSymbol ? node.value.value : node.value;
@@ -154,11 +159,13 @@ export function createArgsFromKeysFunction(queryFieldNode: FieldNode) {
             .mapValues(getValue)
             .value(),
         Variable: node =>
-          _(parents)
-            .flatMap(parent => _.get(parent, node.name.value))
-            .filter(elt => elt !== null && elt !== undefined)
-            .uniq()
-            .value(),
+          batched
+            ? _(parents)
+                .flatMap(parent => _.get(parent, node.name.value))
+                .filter(elt => elt !== null && elt !== undefined)
+                .uniq()
+                .value()
+            : _.get(parents[0], node.name.value),
       },
     }).arguments;
     return _.merge({}, ...args);

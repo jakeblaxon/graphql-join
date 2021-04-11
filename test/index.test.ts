@@ -84,7 +84,8 @@ describe('createArgsFromKeysFunction', () => {
     const result = createArgsFromKeysFunction(
       getQueryFieldNode(`#graphql
         books { title }
-      `)
+      `),
+      true
     );
     expect(result([])).toEqual({});
   });
@@ -95,7 +96,8 @@ describe('createArgsFromKeysFunction', () => {
         books(where: {author: [{first: "William"}, {last: "Shakespeare"}]})  {
           title
         }
-      `)
+      `),
+      true
     );
     expect(result([])).toEqual({
       where: {author: [{first: 'William'}, {last: 'Shakespeare'}]},
@@ -133,7 +135,8 @@ describe('createArgsFromKeysFunction', () => {
         ) {
           title
         }
-      `)
+      `),
+      true
     );
     expect(result([])).toEqual({
       int: 1,
@@ -169,7 +172,8 @@ describe('createArgsFromKeysFunction', () => {
         books(titles: $title)  {
           title
         }
-      `)
+      `),
+      true
     );
     const parentsScalar = [
       {title: 'title 1'},
@@ -194,7 +198,8 @@ describe('createArgsFromKeysFunction', () => {
         books(where: [$title, $author])  {
           title
         }
-      `)
+      `),
+      true
     );
     const parents = [
       {title: 'title 1', author: 'author 1'},
@@ -211,7 +216,8 @@ describe('createArgsFromKeysFunction', () => {
         books(where: {title: $title})  {
           title
         }
-      `)
+      `),
+      true
     );
     const parents = [{title: 'title 1'}];
     expect(result(parents)).toEqual({
@@ -427,6 +433,7 @@ describe('GraphQLJoinTransform', () => {
   const typeDefs = `#graphql
     type Query {
       getProductsById(ids: [String!]!): [Product!]!
+      getProductById(id: String!): Product
       getReviewsById(ids: [String!]!): [Review]
       getReviewsByProductId(productIds: [String!]!): [Review!]!
     }
@@ -449,6 +456,7 @@ describe('GraphQLJoinTransform', () => {
     }
     extend type Review {
       product: Product!
+      productUnbatched: Product
     }
   `;
 
@@ -456,6 +464,9 @@ describe('GraphQLJoinTransform', () => {
     Query: {
       getProductsById(parent: unknown, args: {ids: string[]}) {
         return products.filter(product => args.ids.includes(product.upc));
+      },
+      getProductById(parent: unknown, args: {ids: string[]}) {
+        return products.find(product => args.ids.includes(product.upc));
       },
       getReviewsById(parent: unknown, args: {ids: string[]}) {
         return reviews.filter(review => args.ids.includes(review.id));
@@ -522,6 +533,7 @@ describe('GraphQLJoinTransform', () => {
     resolvers: {
       Review: {
         product: 'getProductsById(ids: $productId) { productId: upc }',
+        productUnbatched: 'getProductById(id: $productId) @unbatched',
       },
       Product: {
         reviews: 'getReviewsByProductId(productIds: $upc) { upc: productId }',
@@ -539,6 +551,9 @@ describe('GraphQLJoinTransform', () => {
             getProductsById() {
               throw Error('error in getProductsById');
             },
+            getProductById() {
+              throw Error('error in getProductById');
+            },
           },
         },
       }),
@@ -554,6 +569,17 @@ describe('GraphQLJoinTransform', () => {
       message: 'error in getProductsById',
       locations: [],
       path: ['getReviewsById', 0, 'product'],
+    });
+    const resultUnbatched = await execute(
+      wrappedSchema,
+      parse(
+        '{ getReviewsById(ids: ["1", "2", "3", "4"]) { id productUnbatched { name } } }'
+      )
+    );
+    expect(resultUnbatched.errors?.[0]).toEqual({
+      message: 'error in getProductById',
+      locations: [],
+      path: ['getReviewsById', 0, 'productUnbatched'],
     });
   });
 

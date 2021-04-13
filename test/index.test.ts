@@ -94,6 +94,7 @@ describe('createArgsFromKeysFunction', () => {
       getQueryFieldNode(`#graphql
         books { title }
       `),
+      {},
       true
     );
     expect(result([])).toEqual({});
@@ -106,6 +107,7 @@ describe('createArgsFromKeysFunction', () => {
           title
         }
       `),
+      {},
       true
     );
     expect(result([])).toEqual({
@@ -145,6 +147,7 @@ describe('createArgsFromKeysFunction', () => {
           title
         }
       `),
+      {},
       true
     );
     expect(result([])).toEqual({
@@ -182,6 +185,7 @@ describe('createArgsFromKeysFunction', () => {
           title
         }
       `),
+      {},
       true
     );
     const parentsScalar = [
@@ -206,10 +210,23 @@ describe('createArgsFromKeysFunction', () => {
       getQueryFieldNode(`#graphql
         books(title: $title) @unbatched
       `),
+      {},
       false
     );
     const parent = {title: 'title 1'};
     expect(result([parent])).toEqual({title: 'title 1'});
+  });
+
+  it('injects user args into their corresponding variables, taking priority over the parent fields', () => {
+    const result = createArgsFromKeysFunction(
+      getQueryFieldNode(`#graphql
+        books(title: $title) @unbatched
+      `),
+      {title: 'user title'},
+      false
+    );
+    const parent = {title: 'title 1'};
+    expect(result([parent])).toEqual({title: 'user title'});
   });
 
   it('handles variables in lists properly', () => {
@@ -219,6 +236,7 @@ describe('createArgsFromKeysFunction', () => {
           title
         }
       `),
+      {},
       true
     );
     const parents = [
@@ -237,6 +255,7 @@ describe('createArgsFromKeysFunction', () => {
           title
         }
       `),
+      {},
       true
     );
     const parents = [{title: 'title 1'}];

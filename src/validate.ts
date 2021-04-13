@@ -28,6 +28,7 @@ import {
   ScalarLeafsRule,
   typeFromAST,
   isTypeSubTypeOf,
+  InputValueDefinitionNode,
 } from 'graphql';
 
 export function validateFieldConfig(
@@ -48,11 +49,13 @@ export function validateFieldConfig(
 
 class Validator {
   private document: DocumentNode;
+  private typeDefsDocument: DocumentNode;
   private operationDefinition: OperationDefinitionNode;
   private queryFieldNode: FieldNode;
   private typeNode: ObjectTypeDefinitionNode;
   private childType: GraphQLObjectType | null;
   private isUnbatched: boolean;
+  private customParameters: InputValueDefinitionNode[];
 
   constructor(
     private fieldConfig: string,
@@ -64,15 +67,14 @@ class Validator {
     // rebuild schema, as its ast nodes may be undefined
     this.schema = buildSchema(printSchema(schema));
 
-    let document: DocumentNode;
     try {
-      document = parse(`{${fieldConfig}}`);
+      this.document = parse(`{${fieldConfig}}`);
     } catch (e) {
       throw this.error(e);
     }
 
     this.isUnbatched = false;
-    this.document = visit(document, {
+    this.document = visit(this.document, {
       Directive: node =>
         node.name.value === 'unbatched'
           ? (this.isUnbatched = true) && null
@@ -82,6 +84,12 @@ class Validator {
       this.warn(
         'Use of unbatched queries is not recommended as it results in the n+1 problem.'
       );
+
+    try {
+      this.typeDefsDocument = parse(this.typeDefs);
+    } catch (e) {
+      throw this.error(`typeDefs is invalid: ${e}`);
+    }
 
     const operationDefinition = this.document.definitions[0];
     if (operationDefinition?.kind !== Kind.OPERATION_DEFINITION)
@@ -100,6 +108,7 @@ class Validator {
       throw this.error(`Type "${typeName}" must be an object type.`);
     this.typeNode = typeNode;
 
+    this.customParameters = this.validateCustomParameters();
     this.validateArguments();
     this.childType = this.validateReturnType();
     this.validateSelections();
@@ -109,6 +118,49 @@ class Validator {
     return {queryFieldNode: this.queryFieldNode, isUnbatched: this.isUnbatched};
   }
 
+  private validateCustomParameters() {
+    const customParameters: InputValueDefinitionNode[] = [];
+    visit(this.typeDefsDocument, {
+      ObjectTypeDefinition: node =>
+        node.name.value === this.typeName ? node : false,
+      ObjectTypeExtension: node =>
+        node.name.value === this.typeName ? node : false,
+      FieldDefinition: node =>
+        node.name.value === this.fieldName ? node : false,
+      InputValueDefinition: node => {
+        customParameters.push(node);
+      },
+    });
+    const variableNames = new Set<string>();
+    visit(this.operationDefinition, {
+      Variable: node => {
+        variableNames.add(node.name.value);
+      },
+    });
+    customParameters.forEach(node => {
+      if (node.type.kind !== Kind.NON_NULL_TYPE)
+        throw this.error(
+          `All custom parameters must be non-nullable, but $${
+            node.name.value
+          } is of type "${print(node.type)}".`
+        );
+      if (!variableNames.has(node.name.value))
+        throw this.error(
+          `Custom parameter $${node.name.value} is not used in query.`
+        );
+      if (
+        this.typeNode.fields?.find(
+          field => field.name.value === node.name.value
+        )
+      )
+        this.warn(
+          `Custom parameter $${node.name.value} eclipses field of the same name in the parent type. ` +
+            `"${this.typeName}.${node.name.value}" will not be available to use as a variable in the query.`
+        );
+    });
+    return customParameters;
+  }
+
   private validateArguments() {
     const variableNames = new Set<string>();
     visit(this.operationDefinition, {
@@ -116,43 +168,61 @@ class Validator {
         variableNames.add(node.name.value);
       },
     });
-    const variableDefinitions = Array.from(variableNames).map(variableName => {
-      const fieldNode = this.typeNode.fields?.find(
-        field => field.name.value === variableName
-      );
-      if (!fieldNode)
-        throw this.error(
-          `Field corresponding to "$${variableName}" not found in type "${this.typeNode.name.value}".`
+    const variableDefinitions = Array.from(variableNames)
+      .map(variableName => {
+        if (
+          this.customParameters.find(node => node.name.value === variableName)
+        )
+          return;
+        const fieldNode = this.typeNode.fields?.find(
+          field => field.name.value === variableName
         );
-      return {
-        kind: Kind.VARIABLE_DEFINITION,
-        variable: {
-          kind: Kind.VARIABLE,
-          name: {
-            kind: Kind.NAME,
-            value: variableName,
+        if (!fieldNode)
+          throw this.error(
+            `Field corresponding to "$${variableName}" not found in type "${this.typeNode.name.value}".`
+          );
+        return {
+          kind: Kind.VARIABLE_DEFINITION,
+          variable: {
+            kind: Kind.VARIABLE,
+            name: {
+              kind: Kind.NAME,
+              value: variableName,
+            },
           },
-        },
-        type: this.isUnbatched
-          ? fieldNode.type
-          : {
-              kind: Kind.NON_NULL_TYPE,
-              type: {
-                kind: Kind.LIST_TYPE,
+          type: this.isUnbatched
+            ? fieldNode.type
+            : {
+                kind: Kind.NON_NULL_TYPE,
                 type: {
-                  kind: Kind.NON_NULL_TYPE,
+                  kind: Kind.LIST_TYPE,
                   type: {
-                    kind: Kind.NAMED_TYPE,
-                    name: {
-                      kind: Kind.NAME,
-                      value: unwrapTypeNode(fieldNode.type).name.value,
+                    kind: Kind.NON_NULL_TYPE,
+                    type: {
+                      kind: Kind.NAMED_TYPE,
+                      name: {
+                        kind: Kind.NAME,
+                        value: unwrapTypeNode(fieldNode.type).name.value,
+                      },
                     },
                   },
                 },
               },
+        };
+      })
+      .concat(
+        this.customParameters.map(node => ({
+          kind: Kind.VARIABLE_DEFINITION,
+          variable: {
+            kind: Kind.VARIABLE,
+            name: {
+              kind: Kind.NAME,
+              value: node.name.value,
             },
-      };
-    });
+          },
+          type: node.type,
+        }))
+      );
     const errors = validate(
       this.schema,
       visit(this.document, {
@@ -170,14 +240,8 @@ class Validator {
       this.queryFieldNode.name.value
     ]?.type;
     if (!returnType) throw this.error('Could not find return type for query.');
-    let typeDefsDocument;
-    try {
-      typeDefsDocument = parse(this.typeDefs);
-    } catch (e) {
-      throw this.error(`typeDefs is invalid: ${e}`);
-    }
     let intendedType: TypeNode | undefined;
-    visit(typeDefsDocument, {
+    visit(this.typeDefsDocument, {
       ObjectTypeDefinition: node =>
         node.name.value === this.typeName ? node : false,
       ObjectTypeExtension: node =>

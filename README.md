@@ -153,6 +153,35 @@ Note that in this case we have to call a new query `getBooksByAuthorIds` because
 
 As a final note, if you are going to join on a list, then the list can only contain scalar values, and you can only use this one field to join on. GraphQL-Join will not let you use more than one selection if the selection is a list type. This is because it's unclear how to match in this case, as there are multiple options that lead to different results.
 
+## Custom Parameters
+
+You can add custom parameters to your fields that can be passed through to the subquery. To do this, simply define the parameters in your typeDefs, and use the parameters by name as variables in your query:
+
+```js
+{
+  typeDefs: `
+    extend type Author {
+      books(publishedAfter: Int!): [Book!]!
+    }
+  `,
+  resolvers: {
+    Author: {
+      books: `
+        getBooksByAuthorIds(
+          ids: $id,
+          publicationYearGreaterThan: $publishedAfter
+        ) { 
+          id: authorIds
+        }`
+    }
+  }
+}
+```
+
+Now whatever the user passes in as the `publishedAfter` parameter for `Author.books` will get passed to the subquery as the value of the `$publishedAfter` variable.
+
+All custom parameters that you use must be non-nullable, to ensure that the subquery is always valid. You may specify default values in the typeDefs, however. Try to use custom parameter names that don't conflict with field names in the parent type, or else those parent fields will be unavailable to use in the subquery. The variable corresponding to the conflicting parameter/field name will always be set to the parameter value in this case.
+
 ## Unbatched Queries
 
 GraphQL-Join supports batched queries by default, but in certain cases it may not be possible to join with a batched query because the parent and child don't share any common key fields to join on. In this situation, you can make "unbatched" queries (one query per parent) to join parents to children. To specify this, simply replace the selection set with an `@unbatched` directive on the query:

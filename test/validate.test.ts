@@ -538,6 +538,112 @@ describe('validateFieldConfig', () => {
     });
   });
 
+  describe('custom parameters', () => {
+    const schema = makeExecutableSchema({
+      typeDefs: `#graphql
+        type Query {
+          getReviewsByProductId(productIds: [String!]!, pageSize: Int): [Review!]!
+        }
+        type Product {
+          upc: String!
+          name: String
+          price: Int
+        }
+        type Review {
+          id: Int!
+          body: String
+          productId: String!
+        }
+      `,
+    });
+
+    it('requires that all custom parameters must be used', () => {
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId(productIds: $upc) { upc: productId }',
+          'Product',
+          'reviews',
+          `#graphql
+            extend type Product {
+              reviews(pageSize: Int!): [Review!]!
+            }
+          `,
+          schema
+        )
+      ).toThrow(
+        'graphql-join config error for resolver "Product.reviews": Custom parameter $pageSize is not used in query.'
+      );
+    });
+
+    it('requires that custom parameters must be non-nullable', () => {
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId(productIds: $upc, pageSize: $pageSize) { upc: productId }',
+          'Product',
+          'reviews',
+          `#graphql
+            extend type Product {
+              reviews(pageSize: Int): [Review!]!
+            }
+          `,
+          schema
+        )
+      ).toThrow(
+        'graphql-join config error for resolver "Product.reviews": All custom parameters must be non-nullable, but "pageSize" is of type "Int".'
+      );
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId(productIds: $upc) { upc: productId, pageSize: $pageSize }',
+          'Product',
+          'reviews',
+          `#graphql
+            extend type Product {
+              reviews(pageSize: Int!): [Review!]!
+            }
+          `,
+          schema
+        )
+      ).not.toThrow();
+    });
+
+    it('requires that custom parameters must be of the correct type', () => {
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId(productIds: $upc, pageSize: $pageSize) { upc: productId }',
+          'Product',
+          'reviews',
+          `#graphql
+            extend type Product {
+              reviews(pageSize: String!): [Review!]!
+            }
+          `,
+          schema
+        )
+      ).toThrow(
+        'graphql-join config error for resolver "Product.reviews": Custom parameter $pageSize must be of type "Int!" but is of type "String!"'
+      );
+    });
+
+    it('warns when a custom parameter name eclipses a field name in the parent type', () => {
+      expect(() =>
+        validateFieldConfig(
+          'getReviewsByProductId(productIds: $upc, pageSize: $price) { upc: productId }',
+          'Product',
+          'reviews',
+          `#graphql
+            extend type Product {
+              reviews(price: String!): [Review!]!
+            }
+          `,
+          schema
+        )
+      ).toThrow(
+        'graphql-join warning for resolver "Product.reviews": Custom parameter $price eclipses field of the same name in the parent type. ' +
+          '"Product.price" will not be available to use as a variable in the query.'
+      );
+    });
+  });
+
   describe('unbatched queries', () => {
     const scalarSchema = makeExecutableSchema({
       typeDefs: `#graphql

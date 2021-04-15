@@ -21,6 +21,11 @@ export interface GraphQLJoinConfig {
       [field: string]: string;
     };
   };
+  graphqlTools?: {
+    batchDelegateToSchema?: typeof batchDelegateToSchema;
+    delegateToSchema?: typeof delegateToSchema;
+    stitchSchemas?: typeof stitchSchemas;
+  };
 }
 interface GraphQLMeshConfig {
   config: GraphQLJoinConfig;
@@ -34,82 +39,93 @@ export default class GraphQLJoinTransform implements Transform {
   }
 
   public transformSchema(originalSchema: GraphQLSchema) {
-    return stitchSchemas({
+    return (this.config.graphqlTools?.stitchSchemas || stitchSchemas)({
       subschemas: [originalSchema],
       typeDefs: this.config.typeDefs,
-      resolvers: _.mapValues(this.config.resolvers, (typeConfig, typeName) =>
-        _.mapValues(typeConfig, (fieldConfig, fieldName) => {
-          const {queryFieldNode, isUnbatched} = validateFieldConfig(
-            fieldConfig,
-            typeName,
-            fieldName,
-            this.config.typeDefs,
-            originalSchema
-          );
-          return isUnbatched
-            ? createUnbatchedFieldResolver(queryFieldNode, originalSchema)
-            : createBatchedFieldResolver(queryFieldNode, originalSchema);
-        })
-      ),
+      resolvers: this.getResolvers(originalSchema),
     });
   }
-}
 
-export function createUnbatchedFieldResolver(
-  queryFieldNode: FieldNode,
-  schema: GraphQLSchema
-) {
-  return {
-    selectionSet: createParentSelectionSet(queryFieldNode),
-    resolve: (parent, args, context, info) =>
-      delegateToSchema({
-        schema,
-        operation: 'query',
-        fieldName: queryFieldNode.name.value,
-        context,
-        info,
-        args: createArgsFromKeysFunction(queryFieldNode, args, false)([parent]),
-      }),
-  } as IResolvers;
-}
+  private getResolvers(originalSchema: GraphQLSchema) {
+    return _.mapValues(this.config.resolvers, (typeConfig, typeName) =>
+      _.mapValues(typeConfig, (fieldConfig, fieldName) => {
+        const {queryFieldNode, isUnbatched} = validateFieldConfig(
+          fieldConfig,
+          typeName,
+          fieldName,
+          this.config.typeDefs,
+          originalSchema
+        );
+        return isUnbatched
+          ? this.createUnbatchedFieldResolver(queryFieldNode, originalSchema)
+          : this.createBatchedFieldResolver(queryFieldNode, originalSchema);
+      })
+    );
+  }
 
-export function createBatchedFieldResolver(
-  queryFieldNode: FieldNode,
-  schema: GraphQLSchema
-) {
-  const childSelectionSetTransform = new WrapQuery(
-    [queryFieldNode.name.value],
-    selectionSet => ({
-      ...selectionSet,
-      selections: selectionSet.selections.concat(
-        createChildSelectionSet(queryFieldNode)
-      ),
-    }),
-    result => result
-  );
-  return {
-    selectionSet: createParentSelectionSet(queryFieldNode),
-    resolve: (parent, args, context, info) =>
-      batchDelegateToSchema({
-        schema,
-        operation: 'query',
-        fieldName: queryFieldNode.name.value,
-        key: parent,
-        context,
-        info,
-        transforms: [childSelectionSetTransform],
-        argsFromKeys: createArgsFromKeysFunction(queryFieldNode, args, true),
-        valuesFromResults: (results, keys) =>
-          mapChildrenToParents(
-            results,
-            keys,
+  private createUnbatchedFieldResolver(
+    queryFieldNode: FieldNode,
+    schema: GraphQLSchema
+  ) {
+    return {
+      selectionSet: createParentSelectionSet(queryFieldNode),
+      resolve: (parent, args, context, info) =>
+        (this.config.graphqlTools?.delegateToSchema || delegateToSchema)({
+          schema,
+          operation: 'query',
+          fieldName: queryFieldNode.name.value,
+          context,
+          info,
+          args: createArgsFromKeysFunction(
             queryFieldNode,
-            isListType(info.returnType) ||
-              (isNonNullType(info.returnType) &&
-                isListType(info.returnType.ofType))
-          ),
+            args,
+            false
+          )([parent]),
+        }),
+    } as IResolvers;
+  }
+
+  private createBatchedFieldResolver(
+    queryFieldNode: FieldNode,
+    schema: GraphQLSchema
+  ) {
+    const childSelectionSetTransform = new WrapQuery(
+      [queryFieldNode.name.value],
+      selectionSet => ({
+        ...selectionSet,
+        selections: selectionSet.selections.concat(
+          createChildSelectionSet(queryFieldNode)
+        ),
       }),
-  } as IResolvers;
+      result => result
+    );
+    return {
+      selectionSet: createParentSelectionSet(queryFieldNode),
+      resolve: (parent, args, context, info) =>
+        (
+          this.config.graphqlTools?.batchDelegateToSchema ||
+          batchDelegateToSchema
+        )({
+          schema,
+          operation: 'query',
+          fieldName: queryFieldNode.name.value,
+          key: parent,
+          context,
+          info,
+          transforms: [childSelectionSetTransform],
+          argsFromKeys: createArgsFromKeysFunction(queryFieldNode, args, true),
+          valuesFromResults: (results, keys) =>
+            mapChildrenToParents(
+              results,
+              keys,
+              queryFieldNode,
+              isListType(info.returnType) ||
+                (isNonNullType(info.returnType) &&
+                  isListType(info.returnType.ofType))
+            ),
+        }),
+    } as IResolvers;
+  }
 }
 
 export function createParentSelectionSet(queryFieldNode: FieldNode) {

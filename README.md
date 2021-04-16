@@ -198,6 +198,22 @@ The `$authorId` parameter will be set to whatever value the `parent.authorId` is
 
 > :warning: Unbatched queries should be avoided if at all possible because they result in the n+1 problem. Each parent object will make its own network call, potentially congesting the network and increasing delay times.
 
+## Advanced
+
+GraphQL-Join is built on top of the [`@graphql-tools` library](https://www.graphql-tools.com/), currently using major version 7. It specifically uses the `batchDelegateToSchema`, `delegateToSchema`, and `stitchSchemas` methods to create the resolver implementations under the hood. Since there are breaking changes in these methods across major versions, GraphQL-Join allows you to specify which instances of these methods it should use, so that it may work with other libraries using a specific version of `@graphql-tools`. You can specify this in the `GraphQLJoinTransform` config as follows:
+
+```js
+new GraphQLJoinTransform({
+  typeDefs: ...
+  resolvers: ...
+  graphqlTools: {
+    batchDelegateToSchema: batchDelegateToSchemaV6,
+    delegateToSchema: delegateToSchemaV6,
+    stitchSchemas: stitchSchemasV6,
+  }
+})
+```
+
 ## Benefits
 
 Using GraphQL-Join has several benefits:

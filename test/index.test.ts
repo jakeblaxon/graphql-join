@@ -1,3 +1,6 @@
+import {stitchSchemas} from '@graphql-tools/stitch';
+import {delegateToSchema} from '@graphql-tools/delegate';
+import {batchDelegateToSchema} from '@graphql-tools/batch-delegate';
 import {execute, Kind, parse, print} from 'graphql';
 import {makeExecutableSchema} from '@graphql-tools/schema';
 import {wrapSchema} from '@graphql-tools/wrap';
@@ -969,5 +972,61 @@ describe('GraphQLJoinTransform', () => {
         ],
       },
     });
+  });
+
+  it('uses the graphql-tools instances passed in the config, if provided', async () => {
+    const batchDelegateToSchemaMock = jest.fn(args =>
+      batchDelegateToSchema(args)
+    );
+    const delegateToSchemaMock = jest.fn(args => delegateToSchema(args));
+    const stitchSchemasMock = jest.fn(args => stitchSchemas(args));
+    const graphqlJoinTransform = new GraphQLJoinTransform({
+      typeDefs: typeExtensions,
+      resolvers: {
+        Review: {
+          product: 'getProductsById(ids: $productId) { productId: upc }',
+          productUnbatched: 'getProductById(id: $productId) @unbatched',
+        },
+        Product: {
+          reviews: 'getReviewsByProductId(productIds: $upc) { upc: productId }',
+        },
+      },
+      graphqlTools: {
+        batchDelegateToSchema: batchDelegateToSchemaMock,
+        delegateToSchema: delegateToSchemaMock,
+        stitchSchemas: stitchSchemasMock,
+      },
+    });
+    const wrappedSchema = wrapSchema({
+      schema,
+      transforms: [graphqlJoinTransform],
+    });
+    await execute(
+      wrappedSchema,
+      parse(`#graphql
+        {
+          getReviewsById(ids: ["1", "2", "3", "4"]) {
+            product {
+              name
+            }
+          }
+        }
+      `)
+    );
+    await execute(
+      wrappedSchema,
+      parse(`#graphql
+        {
+          getReviewsById(ids: ["1", "2", "3", "4"]) {
+            productUnbatched {
+              name
+            }
+          }
+        }
+      `)
+    );
+    expect(batchDelegateToSchemaMock).toHaveBeenCalled();
+    expect(delegateToSchemaMock).toHaveBeenCalled();
+    expect(stitchSchemasMock).toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "graphql-join",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Join types together in your schema declaratively with SDL.",
   "main": "build/src/index.js",
   "types": "build/src/index.d.ts",
